@@ -110,26 +110,20 @@
   .num { font-variant-numeric: tabular-nums; }
 
   /* ---------------- header ---------------- */
-  header { padding: calc(var(--safe-top) + 12px) 16px 0; flex: 0 0 auto; }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .01em; display: flex; align-items: center; gap: 8px; min-height: 18px; white-space: nowrap; overflow: hidden; }
-  .eyebrow .sep { opacity: .5; }
-  .status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 500; }
+  header { padding: calc(var(--safe-top) + 14px) 16px 0; flex: 0 0 auto; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 {
+    font-size: 34px; line-height: 1.1; margin: 0; letter-spacing: .01em;
+    font-weight: 200; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none; cursor: pointer;
+  }
+  h1:active { opacity: .6; }
+  .status { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 500; padding: 6px 0 6px 14px; white-space: nowrap; }
   .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
   .status.ok .dot { background: var(--ok); }
   .status.busy .dot { background: var(--accent); animation: pulse 1s infinite; }
   .status.err .dot { background: var(--danger); }
   @keyframes pulse { 50% { opacity: .25; } }
-  h1 { font-size: 30px; line-height: 1.1; margin: 2px 0 0; letter-spacing: -.02em; font-weight: 800; }
-  .actions { display: flex; gap: 8px; }
-  .iconbtn {
-    width: 38px; height: 38px; border-radius: 12px;
-    display: grid; place-items: center; color: var(--text-2);
-    background: var(--surface); box-shadow: var(--shadow-card);
-    transition: transform .12s, background .12s;
-  }
-  .iconbtn:active { transform: scale(.94); background: var(--surface-2); }
-  .iconbtn svg { width: 19px; height: 19px; }
 
   .tabs {
     display: flex; gap: 2px; margin-top: 16px; padding: 4px;
@@ -153,7 +147,7 @@
   .tab .n:empty { display: none; }
 
   .chips {
-    display: flex; gap: 8px; padding: 12px 16px 10px;
+    display: flex; gap: 8px; padding: 12px 16px 8px;
     overflow-x: auto; scrollbar-width: none; flex: 0 0 auto;
   }
   .chips::-webkit-scrollbar { display: none; }
@@ -161,15 +155,16 @@
     flex: 0 0 auto; height: 34px; padding: 0 13px; border-radius: 999px;
     border: 1.5px solid transparent; background: var(--surface); box-shadow: var(--shadow-card);
     font-size: 13.5px; font-weight: 600; color: var(--text-2);
-    display: inline-flex; align-items: center; gap: 7px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     transition: background .15s, color .15s, border-color .15s, transform .1s;
     --c: var(--accent);
   }
   .chip:active { transform: scale(.96); }
-  .chip .swatch { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 22%, transparent); }
-  .chip .n { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .chip .swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 22%, transparent); }
   .chip.on { border-color: color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 13%, var(--surface)); color: color-mix(in srgb, var(--c) 78%, var(--text)); }
-  .chip.on .n { color: inherit; opacity: .75; }
+  /* filter row: short uppercase labels that share the width */
+  .chip.filter { flex: 1 1 0; min-width: 64px; height: 32px; padding: 0 10px; border-radius: 11px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .chip.filter .swatch { margin-right: -1px; }
 
   /* ---------------- pull to refresh ---------------- */
   .ptr { height: 0; overflow: hidden; flex: 0 0 auto; display: flex; align-items: flex-end; justify-content: center; transition: height .22s ease; }
@@ -178,7 +173,6 @@
   .ptr.ready .ptr-icon { color: var(--accent); }
   .ptr.refreshing .ptr-icon { color: var(--accent); animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .eyebrow { cursor: pointer; }
 
   /* ---------------- pages ---------------- */
   .pages {
@@ -318,17 +312,9 @@
 <body>
 
 <header>
-  <div class="eyebrow">
-    <span id="dateLine"></span><span class="sep">·</span>
-    <span class="status" id="status"><span class="dot"></span><span id="statusText">Not connected</span></span>
-  </div>
   <div class="top">
-    <h1>Bureau</h1>
-    <div class="actions">
-      <button class="iconbtn" id="btnSettings" aria-label="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-      </button>
-    </div>
+    <h1 id="title">Bureau</h1>
+    <button class="status" id="status" aria-label="Refresh"><span class="dot"></span><span id="statusText">Not connected</span></button>
   </div>
   <nav class="tabs" id="tabs"></nav>
 </header>
@@ -563,21 +549,18 @@
       tabs.appendChild(b);
     });
 
-    // chips: every tag in the file, most used first
+    // chips: every tag in the file, most used first, shown as its first four letters.
+    // Tap to filter, tap again to clear; nothing selected shows everything.
     const tags = allTags();
     chips.innerHTML = '';
-    const all = document.createElement('button');
-    all.className = 'chip' + (activeFilters.size === 0 ? ' on' : '');
-    all.textContent = 'All';
-    all.onclick = () => { activeFilters.clear(); persistFilters(); render(); };
-    chips.appendChild(all);
     tags.forEach(t => {
       const key = t.toLowerCase();
-      const count = (model.sections[currentSection]?.items || []).filter(it => it.tag.toLowerCase() === key && !it.done).length;
       const c = document.createElement('button');
-      c.className = 'chip' + (activeFilters.has(key) ? ' on' : '');
+      c.className = 'chip filter' + (activeFilters.has(key) ? ' on' : '');
+      c.dataset.tag = key;
       c.style.setProperty('--c', tagColor(t));
-      c.innerHTML = `<span class="swatch"></span>${esc(t)}<span class="n num">${count}</span>`;
+      c.innerHTML = `<span class="swatch"></span>${esc(t.slice(0, 4))}`;
+      c.title = t;
       c.onclick = () => { activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key); persistFilters(); render(); };
       chips.appendChild(c);
     });
@@ -652,17 +635,9 @@
         currentSection = i; store.set(LS.section, i);
         [...$('tabs').children].forEach((t, k) => t.classList.toggle('active', k === i));
         $('tabs').children[i]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-        renderChipCounts();
       }
     }, 80);
   });
-  function renderChipCounts() {
-    const items = model.sections[currentSection]?.items || [];
-    [...$('chips').children].slice(1).forEach(c => {
-      const name = c.childNodes[1].textContent.toLowerCase();
-      c.querySelector('.n').textContent = items.filter(it => it.tag.toLowerCase() === name && !it.done).length;
-    });
-  }
   function persistFilters() { store.set(LS.filters, [...activeFilters]); }
 
   // ---------- edits ----------
@@ -924,7 +899,7 @@
     el.innerHTML = '';
     names.forEach(n => {
       const c = document.createElement('button');
-      c.className = 'chip' + (n === selected ? ' on' : '');
+      c.className = 'chip pick' + (n === selected ? ' on' : '');
       if (colorFor) { c.style.setProperty('--c', colorFor(n)); c.innerHTML = `<span class="swatch"></span>${esc(n)}`; }
       else c.textContent = n;
       c.onclick = () => { [...el.children].forEach(x => x.classList.toggle('on', x === c)); onPick(n); };
@@ -995,7 +970,8 @@
     $('btnSignOut').style.display = t ? '' : 'none';
     openSheet('settingsSheet');
   }
-  $('btnSettings').onclick = openSettings;
+  // Settings stay out of the way: the title is the only way in.
+  $('title').onclick = openSettings;
   $('settingsClose').onclick = closeSheets;
   $('btnConnect').onclick = startAuth;
   $('btnFinish').onclick = async () => {
@@ -1016,8 +992,8 @@
     setStatus('', 'Not connected');
     if (host) toast('Signed out. Reopen the app to log in again.');
   };
-  // Tapping the date/status line refreshes too; pull-to-refresh is the main gesture.
-  document.querySelector('.eyebrow').onclick = () => { if (!pull.refreshing) doRefresh(); };
+  // Tapping the status refreshes too; pull-to-refresh is the main gesture.
+  $('status').onclick = () => { if (!pull.refreshing) doRefresh(); };
 
   // ---------- pull to refresh ----------
   const PTR_MAX = 76, PTR_TRIGGER = 58;
@@ -1069,8 +1045,6 @@
 
   // ---------- boot ----------
   (async () => {
-    $('dateLine').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-
     // show cached content immediately
     const cache = store.get(LS.cache);
     if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }

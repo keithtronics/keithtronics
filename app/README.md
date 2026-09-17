@@ -3,10 +3,11 @@
 A swipeable, filterable view of a Markdown task list that lives in Dropbox, running entirely on an iPhone inside the free [Scriptable](https://scriptable.app) app. Nothing is hosted anywhere. The page is embedded in one script, Dropbox tokens live in the iOS keychain, and the task file only ever travels between Dropbox and the phone.
 
 - **Swipe between sections.** Each `## Heading` in the file is a page. Swipe or tap the tab.
-- **Filter by tag.** Chips for every `[Tag]` that appears at the start of items, most used first. Tap more than one to combine. Colors are assigned on first sight and stay stable.
+- **Filter by tag.** A chip for every `[Tag]` that appears at the start of items, labeled with its first four letters, most used first. Tap to filter, tap again to clear, tap several to combine. Colors are assigned on first sight and stay stable.
 - **Check things off.** Tapping a checkbox writes back to the file. A completed top-level item slides away, is struck through, and lands at the top of Done. Every change has a six-second Undo. Un-checking something in Done puts it back where it came from (the app remembers), or asks which section if it doesn't know. Subtask checkboxes flip in place.
 - **Add with the floating button.** Title, tag, section and an optional note. It lands at the top of the chosen section as `- [ ] **[Tag] Title** - note`.
-- **Reads offline.** The last copy is cached on the phone and refreshed on every open. Pull down to refresh, or tap the date line.
+- **Reads offline.** The last copy is cached on the phone and refreshed on every open. Pull down to refresh, or tap the status text.
+- **Settings are hidden.** Tap the word Bureau to open them (file path, sign out).
 - **Home Screen widget.** The same script, added as a Scriptable widget, shows the open items of the first section. Tapping it opens the app.
 
 The file is never reformatted. Edits change only the lines they touch, and saves use Dropbox's revision check so a change made elsewhere is never overwritten silently.
@@ -31,7 +32,7 @@ At [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) create
 
 Run the script. It asks for the app key, opens Dropbox so you can allow access, and Dropbox shows a code. Copy the code, come back, and paste it in the prompt (it is prefilled from the clipboard when it looks right). That's it. Later runs go straight to the page.
 
-If the file is not at `/TASKS.md`, change the path in the gear sheet.
+If the file is not at `/TASKS.md`, tap the word Bureau and change the path there.
 
 ### 4. Make it feel like an app
 
@@ -40,7 +41,7 @@ If the file is not at `/TASKS.md`, change the path in the gear sheet.
 
 `FULLSCREEN` at the top of the script controls whether the page fills the screen (default) or shows Scriptable's bar with a Done button.
 
-**Sign out** in the gear sheet clears the keychain entry. The next run logs in again.
+**Sign out** (tap Bureau) clears the keychain entry. The next run logs in again.
 
 ## File format the parser expects
 
