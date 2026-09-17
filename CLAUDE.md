@@ -18,17 +18,17 @@ keithtronics/
 └── app/                             # Runs on the phone inside Scriptable; never hosted
     ├── README.md                    # Setup and usage
     ├── index.html                   # The page: vanilla JS, also runs in a browser for development
-    ├── scriptable/Tasks.template.js # Scriptable host: login, keychain, widget, page bridge
-    ├── build.mjs                    # node app/build.mjs → inlines index.html into Tasks.js
-    └── Tasks.js                     # Generated; committed so it can be copied to the phone
+    ├── scriptable/Bureau.template.js # Scriptable host: login, keychain, widget, page bridge
+    ├── build.mjs                    # node app/build.mjs → inlines index.html into Bureau.js
+    └── Bureau.js                     # Generated; committed so it can be copied to the phone
 ```
 
-### Tasks app notes
+### Bureau app notes
 
 - Talks to Dropbox directly (OAuth PKCE with Dropbox's no-redirect paste-a-code flow, `files/download`, `files/upload` with rev check). No server, no secret, no redirect URI.
 - The page talks to its host through `window.__host` / `window.__hostState` (injected) and `window.__outbox` / `window.__waiter` (drained by the host's `evaluateJavaScript` loop). Everything the page stores goes through `store`, which mirrors to the host.
 - The parser in `app/index.html` depends on the file's conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Tags are read from the file, never hardcoded. Keep edits line-surgical so the file never gets reformatted.
-- After editing `index.html` or the template, run `node app/build.mjs` and commit `Tasks.js`. Test with Playwright: mock the Dropbox endpoints for the browser path, and run `Tasks.js` under stubbed Scriptable globals with a real page as the WebView.
+- After editing `index.html` or the template, run `node app/build.mjs` and commit `Bureau.js`. Test with Playwright: mock the Dropbox endpoints for the browser path, and run `Bureau.js` under stubbed Scriptable globals with a real page as the WebView.
 
 ### Recommended Directory Structure
 
