@@ -5,21 +5,28 @@ This document provides guidance for AI assistants working with this codebase.
 ## Project Overview
 
 **Repository:** keithtronics
-**Status:** New project (initial setup)
-**Last Updated:** 2026-01-26
+**Status:** Personal tools
+**Last Updated:** 2026-09-17
 
-> **Note:** This is a newly initialized repository. Update this section as the project develops with:
-> - Project purpose and goals
-> - Technology stack
-> - Target platforms/users
+Small personal utilities. The first one is a phone-friendly view of Keith's Dropbox `TASKS.md` (see README.md).
 
 ## Codebase Structure
 
 ```
 keithtronics/
-├── CLAUDE.md          # This file - AI assistant guidelines
-└── (project files)    # To be added
+├── CLAUDE.md               # This file - AI assistant guidelines
+├── README.md               # Setup and usage for the Tasks app
+└── docs/                   # Served by GitHub Pages (Settings > Pages > /docs)
+    ├── index.html          # Tasks app: single file, vanilla JS, no build step
+    ├── manifest.webmanifest
+    └── icon.svg
 ```
+
+### Tasks app notes
+
+- Talks to Dropbox directly from the browser (OAuth PKCE, `files/download`, `files/upload` with rev check). No server, no secret.
+- The parser in `docs/index.html` depends on the `TASKS.md` conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Keep edits line-surgical so the file never gets reformatted.
+- Smoke-test by serving `docs/` locally and mocking the two `content.dropboxapi.com` endpoints with Playwright.
 
 ### Recommended Directory Structure
 

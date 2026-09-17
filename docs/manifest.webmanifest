@@ -1,0 +1,14 @@
+{
+  "name": "Tasks",
+  "short_name": "Tasks",
+  "description": "Swipe through TASKS.md from Dropbox, filter by client, check things off, add new ones.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111318",
+  "theme_color": "#2f6df6",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

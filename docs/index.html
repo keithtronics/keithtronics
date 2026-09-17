@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tasks">
+<meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="description" content="Swipe through the sections of a Dropbox-hosted TASKS.md, filter by client, check things off and add new ones.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg">
+<title>Tasks</title>
+<style>
+  :root {
+    --bg: #f6f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef0f4;
+    --text: #17181c;
+    --muted: #6b7080;
+    --line: #e2e4ea;
+    --accent: #2f6df6;
+    --accent-ink: #ffffff;
+    --danger: #d64545;
+    --check: #22a06b;
+    --tag-humane: #6b4fe0;
+    --tag-philips: #0b7fbf;
+    --tag-arthrex: #d9571d;
+    --tag-personal: #1e9e6a;
+    --tag-other: #6b7080;
+    --shadow: 0 8px 24px rgba(20, 24, 40, .16);
+    --radius: 14px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111318;
+      --surface: #1a1d24;
+      --surface-2: #232733;
+      --text: #eceef3;
+      --muted: #9aa0b0;
+      --line: #2c3140;
+      --accent: #6d9bff;
+      --accent-ink: #0c1220;
+      --check: #3ccb8a;
+      --tag-humane: #a48cff;
+      --tag-philips: #55b3ee;
+      --tag-arthrex: #ff8a4c;
+      --tag-personal: #4fd39a;
+      --shadow: 0 8px 24px rgba(0, 0, 0, .5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111318;
+    --surface: #1a1d24;
+    --surface-2: #232733;
+    --text: #eceef3;
+    --muted: #9aa0b0;
+    --line: #2c3140;
+    --accent: #6d9bff;
+    --accent-ink: #0c1220;
+    --check: #3ccb8a;
+    --tag-humane: #a48cff;
+    --tag-philips: #55b3ee;
+    --tag-arthrex: #ff8a4c;
+    --tag-personal: #4fd39a;
+    --shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    overscroll-behavior-y: none;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  input, textarea { font: inherit; color: inherit; }
+
+  /* ---- header ---- */
+  header {
+    padding: calc(var(--safe-top) + 10px) 16px 0;
+    background: var(--bg);
+    flex: 0 0 auto;
+  }
+  .titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .titlebar h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status.ok .dot { background: var(--check); }
+  .status.busy .dot { background: var(--accent); animation: pulse 1s infinite; }
+  .status.err .dot { background: var(--danger); }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .iconbtn {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: grid; place-items: center; color: var(--muted);
+    background: var(--surface-2);
+  }
+  .iconbtn:active { opacity: .7; }
+
+  .tabs {
+    display: flex; gap: 4px; margin-top: 10px;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 0 0 auto; padding: 8px 12px; border-radius: 10px 10px 0 0;
+    color: var(--muted); font-weight: 600; font-size: 15px; white-space: nowrap;
+    position: relative;
+  }
+  .tab .n { font-weight: 500; font-size: 12px; margin-left: 4px; opacity: .8; }
+  .tab.active { color: var(--text); }
+  .tab.active::after {
+    content: ""; position: absolute; left: 12px; right: 12px; bottom: 0;
+    height: 3px; border-radius: 3px 3px 0 0; background: var(--accent);
+  }
+  .tabs-rule { height: 1px; background: var(--line); }
+
+  .chips {
+    display: flex; gap: 8px; padding: 10px 16px;
+    overflow-x: auto; scrollbar-width: none; background: var(--bg);
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; padding: 6px 12px; border-radius: 999px;
+    border: 1.5px solid var(--line); background: var(--surface);
+    font-size: 14px; font-weight: 600; color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .chip .swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--muted)); }
+  .chip .n { font-weight: 500; opacity: .7; }
+  .chip.on { border-color: var(--c, var(--accent)); color: var(--text); background: color-mix(in srgb, var(--c, var(--accent)) 14%, var(--surface)); }
+
+  /* ---- pages ---- */
+  .pages {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pages::-webkit-scrollbar { display: none; }
+  .page {
+    flex: 0 0 100%; width: 100%; scroll-snap-align: start; scroll-snap-stop: always;
+    overflow-y: auto; padding: 4px 16px calc(var(--safe-bottom) + 96px);
+    -webkit-overflow-scrolling: touch;
+  }
+  .empty { color: var(--muted); text-align: center; padding: 48px 16px; font-size: 15px; }
+  .empty strong { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+
+  .card {
+    background: var(--surface); border-radius: var(--radius);
+    padding: 12px 12px 12px 10px; margin: 10px 0;
+    box-shadow: 0 1px 0 var(--line);
+  }
+  .card.done { opacity: .6; }
+  .row { display: flex; gap: 10px; align-items: flex-start; }
+  .box {
+    flex: 0 0 auto; width: 26px; height: 26px; margin-top: 1px;
+    border-radius: 8px; border: 2px solid var(--line); background: var(--surface-2);
+    display: grid; place-items: center; color: transparent;
+    transition: background .12s, border-color .12s;
+  }
+  .box svg { width: 16px; height: 16px; }
+  .box.on { background: var(--check); border-color: var(--check); color: #fff; }
+  .row.sub .box { width: 22px; height: 22px; border-radius: 6px; }
+  .main { flex: 1 1 auto; min-width: 0; }
+  .ttl { font-weight: 600; font-size: 16px; line-height: 1.3; }
+  .card.done .ttl { text-decoration: line-through; }
+  .pill {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; padding: 2px 7px; border-radius: 999px; margin-right: 6px;
+    color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent);
+    vertical-align: 2px;
+  }
+  .note {
+    color: var(--muted); font-size: 14px; margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card.open .note { display: block; -webkit-line-clamp: unset; }
+  .note strong { color: var(--text); font-weight: 600; }
+  .note code, .ttl code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+  .note a { color: var(--accent); text-decoration: none; }
+  .subs { margin-top: 8px; display: none; flex-direction: column; gap: 8px; }
+  .card.open .subs { display: flex; }
+  .row.sub .txt { font-size: 14px; }
+  .row.sub.on .txt { text-decoration: line-through; color: var(--muted); }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* ---- FAB ---- */
+  .fab {
+    position: fixed; right: 20px; bottom: calc(var(--safe-bottom) + 20px);
+    width: 58px; height: 58px; border-radius: 18px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center; box-shadow: var(--shadow);
+    transition: transform .15s;
+    z-index: 5;
+  }
+  .fab:active { transform: scale(.94); }
+  .fab svg { width: 28px; height: 28px; }
+
+  /* ---- sheets ---- */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 10; }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: var(--surface); border-radius: 20px 20px 0 0;
+    padding: 12px 16px calc(var(--safe-bottom) + 16px);
+    transform: translateY(105%); transition: transform .22s cubic-bezier(.2,.8,.2,1);
+    max-height: 88dvh; overflow-y: auto;
+  }
+  .sheet.show { transform: none; }
+  .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 12px; }
+  .sheet h2 { font-size: 18px; margin: 0 0 12px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .field input[type=text], .field textarea {
+    width: 100%; padding: 12px; border-radius: 12px; border: 1.5px solid var(--line);
+    background: var(--surface-2); outline: none;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field textarea { min-height: 72px; resize: vertical; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 16px; border-radius: 12px; font-weight: 600; background: var(--surface-2);
+    width: 100%;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.quiet { background: transparent; color: var(--muted); }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: .5; }
+  .btnrow { display: flex; gap: 10px; margin-top: 6px; }
+  .help { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+  .help code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+
+  .toast {
+    position: fixed; left: 16px; right: 16px; bottom: calc(var(--safe-bottom) + 92px); z-index: 6;
+    background: var(--text); color: var(--bg); border-radius: 12px; padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    transform: translateY(20px); opacity: 0; pointer-events: none; transition: .18s;
+    font-size: 14px;
+  }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast button { color: var(--accent); font-weight: 700; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toast button { color: #9ec0ff; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="titlebar">
+    <h1>Tasks</h1>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Not connected</span></div>
+      <button class="iconbtn" id="btnRefresh" aria-label="Refresh">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+      </button>
+      <button class="iconbtn" id="btnSettings" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="tabs-rule"></div>
+</header>
+
+<div class="chips" id="chips"></div>
+
+<main class="pages" id="pages"></main>
+
+<button class="fab" id="fab" aria-label="Add task">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastAction" hidden>Undo</button></div>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- Add sheet -->
+<section class="sheet" id="addSheet" aria-label="Add task">
+  <div class="grab"></div>
+  <h2>New task</h2>
+  <div class="field">
+    <label for="addTitle">Title</label>
+    <input type="text" id="addTitle" placeholder="What needs doing" autocomplete="off" enterkeyhint="done">
+  </div>
+  <div class="field">
+    <label>Tag</label>
+    <div class="seg" id="addTags"></div>
+  </div>
+  <div class="field">
+    <label>Section</label>
+    <div class="seg" id="addSections"></div>
+  </div>
+  <div class="field">
+    <label for="addNote">Note (optional)</label>
+    <textarea id="addNote" placeholder="Context, who, when"></textarea>
+  </div>
+  <div class="btnrow">
+    <button class="btn quiet" id="addCancel">Cancel</button>
+    <button class="btn primary" id="addSave">Add to top of section</button>
+  </div>
+</section>
+
+<!-- Settings sheet -->
+<section class="sheet" id="settingsSheet" aria-label="Settings">
+  <div class="grab"></div>
+  <h2>Dropbox</h2>
+  <p class="help" id="settingsHelp"></p>
+  <div class="field">
+    <label for="appKey">App key</label>
+    <input type="text" id="appKey" placeholder="From dropbox.com/developers/apps" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="field">
+    <label for="filePath">File path</label>
+    <input type="text" id="filePath" placeholder="/TASKS.md" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <p class="help">Redirect URI to register on the app: <code id="redirectUri"></code></p>
+  <div class="btnrow">
+    <button class="btn primary" id="btnConnect">Connect Dropbox</button>
+  </div>
+  <div class="btnrow">
+    <button class="btn danger" id="btnSignOut">Sign out</button>
+    <button class="btn quiet" id="settingsClose">Close</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- config / storage ----------
+  const LS = {
+    appKey: 'tasks.appKey',
+    path: 'tasks.path',
+    tokens: 'tasks.tokens',
+    verifier: 'tasks.pkceVerifier',
+    cache: 'tasks.cache',
+    filters: 'tasks.filters',
+    section: 'tasks.section',
+  };
+  const store = {
+    get(k, fallback = null) { try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+
+  const KNOWN_TAGS = ['Humane', 'Philips', 'Arthrex', 'Personal'];
+  const tagColor = t => ({ humane: 'var(--tag-humane)', philips: 'var(--tag-philips)', arthrex: 'var(--tag-arthrex)', personal: 'var(--tag-personal)' })[String(t).toLowerCase()] || 'var(--tag-other)';
+
+  const $ = id => document.getElementById(id);
+  const redirectUri = location.origin + location.pathname;
+  $('redirectUri').textContent = redirectUri;
+
+  // ---------- state ----------
+  let text = '';       // full file text
+  let rev = null;      // dropbox rev of `text`
+  let model = null;    // parsed sections
+  let activeFilters = new Set(store.get(LS.filters, []));
+  let currentSection = store.get(LS.section, 0);
+  let busy = false;
+
+  // ---------- markdown model ----------
+  // Lines are kept verbatim; every item remembers its line index so edits are surgical.
+  const RX_ITEM = /^(\s*)- \[( |x|X)\] (.*)$/;
+  const RX_BOLD = /^\*\*\[([^\]]+)\]\s*(.*?)\*\*(?:\s+-\s+(.*))?$/;
+  const RX_STRIKE = /^~~\[([^\]]+)\]\s*(.*?)~~(?:\s+-\s+(.*))?$/;
+  const RX_PLAIN_TAG = /^\[([^\]]+)\]\s*(.*)$/;
+
+  function parse(src) {
+    const lines = src.split('\n');
+    const sections = [];
+    let cur = null, item = null;
+    lines.forEach((line, i) => {
+      const h = /^##\s+(.+?)\s*$/.exec(line);
+      if (h) { cur = { name: h[1], line: i, items: [] }; sections.push(cur); item = null; return; }
+      if (!cur) return;
+      const m = RX_ITEM.exec(line);
+      if (!m) return;
+      const indent = m[1].length, done = m[2] !== ' ', body = m[3];
+      if (indent === 0) {
+        item = { line: i, done, tag: '', title: body, note: '', subs: [], raw: body };
+        let t = RX_BOLD.exec(body) || RX_STRIKE.exec(body);
+        if (t) { item.tag = t[1]; item.title = t[2]; item.note = t[3] || ''; }
+        else { const p = RX_PLAIN_TAG.exec(body); if (p) { item.tag = p[1]; item.title = p[2]; } }
+        cur.items.push(item);
+      } else if (item) {
+        item.subs.push({ line: i, done, text: body });
+      }
+    });
+    return { lines, sections };
+  }
+
+  // ---------- inline markdown ----------
+  const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function inline(s) {
+    let h = esc(s);
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/~~(.+?)~~/g, '<s>$1</s>');
+    h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    return h;
+  }
+
+  // ---------- rendering ----------
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+
+  function visible(item) {
+    if (activeFilters.size === 0) return true;
+    return activeFilters.has(item.tag.toLowerCase());
+  }
+
+  function render() {
+    if (!model) return;
+    const tabs = $('tabs'), pages = $('pages'), chips = $('chips');
+    const prevScroll = pages.scrollLeft;
+
+    // tabs
+    tabs.innerHTML = '';
+    model.sections.forEach((s, i) => {
+      const open = s.items.filter(it => !it.done && visible(it)).length;
+      const b = document.createElement('button');
+      b.className = 'tab' + (i === currentSection ? ' active' : '');
+      b.innerHTML = `${esc(s.name)}<span class="n">${open}</span>`;
+      b.onclick = () => goTo(i);
+      tabs.appendChild(b);
+    });
+
+    // chips: known tags first, then anything else that shows up in the file
+    const seen = new Map();
+    model.sections.forEach(s => s.items.forEach(it => { if (it.tag) seen.set(it.tag.toLowerCase(), it.tag); }));
+    const tags = [...KNOWN_TAGS.map(t => t), ...[...seen.values()].filter(t => !KNOWN_TAGS.some(k => k.toLowerCase() === t.toLowerCase()))];
+    chips.innerHTML = '';
+    const all = document.createElement('button');
+    all.className = 'chip' + (activeFilters.size === 0 ? ' on' : '');
+    all.textContent = 'All';
+    all.onclick = () => { activeFilters.clear(); persistFilters(); render(); };
+    chips.appendChild(all);
+    tags.forEach(t => {
+      const key = t.toLowerCase();
+      const count = (model.sections[currentSection]?.items || []).filter(it => it.tag.toLowerCase() === key && !it.done).length;
+      const c = document.createElement('button');
+      c.className = 'chip' + (activeFilters.has(key) ? ' on' : '');
+      c.style.setProperty('--c', tagColor(t));
+      c.innerHTML = `<span class="swatch"></span>${esc(t)}<span class="n">${count}</span>`;
+      c.onclick = () => { activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key); persistFilters(); render(); };
+      chips.appendChild(c);
+    });
+
+    // pages
+    const openCards = new Set([...pages.querySelectorAll('.card.open')].map(c => c.dataset.line));
+    pages.innerHTML = '';
+    model.sections.forEach((s, si) => {
+      const page = document.createElement('section');
+      page.className = 'page';
+      page.dataset.index = si;
+      const items = s.items.filter(visible);
+      if (items.length === 0) {
+        page.innerHTML = `<div class="empty"><strong>Nothing here</strong>${activeFilters.size ? 'for this filter' : 'in ' + esc(s.name)}</div>`;
+      }
+      items.forEach(it => page.appendChild(card(it, openCards.has(String(it.line)))));
+      pages.appendChild(page);
+    });
+    pages.scrollLeft = prevScroll || currentSection * pages.clientWidth;
+    requestAnimationFrame(() => { pages.scrollLeft = currentSection * pages.clientWidth; });
+  }
+
+  function card(it, open) {
+    const el = document.createElement('article');
+    el.className = 'card' + (it.done ? ' done' : '') + (open ? ' open' : '');
+    el.dataset.line = it.line;
+    const subsOpen = it.subs.filter(s => !s.done).length;
+    el.innerHTML = `
+      <div class="row">
+        <button class="box${it.done ? ' on' : ''}" aria-label="Toggle">${CHECK}</button>
+        <div class="main">
+          <div class="ttl">${it.tag ? `<span class="pill" style="--c:${tagColor(it.tag)}">${esc(it.tag)}</span>` : ''}${inline(it.title)}</div>
+          ${it.note ? `<div class="note">${inline(it.note)}</div>` : ''}
+          ${it.subs.length ? `<div class="meta">${subsOpen} of ${it.subs.length} subtasks open</div>` : ''}
+          <div class="subs">${it.subs.map(s => `
+            <div class="row sub${s.done ? ' on' : ''}" data-line="${s.line}">
+              <button class="box${s.done ? ' on' : ''}" aria-label="Toggle subtask">${CHECK}</button>
+              <div class="txt">${inline(s.text)}</div>
+            </div>`).join('')}</div>
+        </div>
+      </div>`;
+    el.querySelector('.row > .box').onclick = e => { e.stopPropagation(); toggleItem(it); };
+    el.querySelectorAll('.row.sub .box').forEach(b => {
+      b.onclick = e => { e.stopPropagation(); toggleSub(Number(b.closest('.row.sub').dataset.line)); };
+    });
+    el.onclick = e => { if (e.target.closest('a')) return; el.classList.toggle('open'); };
+    return el;
+  }
+
+  function goTo(i) {
+    currentSection = i;
+    store.set(LS.section, i);
+    const pages = $('pages');
+    pages.scrollTo({ left: i * pages.clientWidth, behavior: 'smooth' });
+    render();
+  }
+
+  // keep tab state in sync with swipes
+  let scrollTimer = null;
+  $('pages').addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      const pages = $('pages');
+      const i = Math.round(pages.scrollLeft / pages.clientWidth);
+      if (i !== currentSection && model && i < model.sections.length) {
+        currentSection = i; store.set(LS.section, i);
+        // cheap update: tabs + chip counts only
+        [...$('tabs').children].forEach((t, k) => t.classList.toggle('active', k === i));
+        $('tabs').children[i]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+        renderChipCounts();
+      }
+    }, 80);
+  });
+  function renderChipCounts() {
+    const items = model.sections[currentSection]?.items || [];
+    [...$('chips').children].slice(1).forEach(c => {
+      const name = c.childNodes[1].textContent.toLowerCase();
+      c.querySelector('.n').textContent = items.filter(it => it.tag.toLowerCase() === name && !it.done).length;
+    });
+  }
+  function persistFilters() { store.set(LS.filters, [...activeFilters]); }
+
+  // ---------- edits ----------
+  function setMarker(line, done) {
+    return line.replace(/^(\s*- )\[( |x|X)\]/, `$1[${done ? 'x' : ' '}]`);
+  }
+  function restyleTop(body, done) {
+    // open items are bold, done items are struck through: mirror the file's convention
+    const b = RX_BOLD.exec(body), s = RX_STRIKE.exec(body);
+    if (done && b) return `~~[${b[1]}] ${b[2]}~~` + (b[3] ? ` - ${b[3]}` : '');
+    if (!done && s) return `**[${s[1]}] ${s[2]}**` + (s[3] ? ` - ${s[3]}` : '');
+    return body;
+  }
+  function findSection(lines, name) {
+    return lines.findIndex(l => new RegExp(`^##\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i').test(l));
+  }
+
+  async function toggleItem(it) {
+    const lines = model.lines.slice();
+    const block = [it.line, ...it.subs.map(s => s.line)];
+    const end = block[block.length - 1];
+    const done = !it.done;
+    const m = RX_ITEM.exec(lines[it.line]);
+    lines[it.line] = setMarker(`${m[1]}- [ ] ${restyleTop(m[3], done)}`, done);
+    if (done) it.subs.forEach(s => { lines[s.line] = setMarker(lines[s.line], true); });
+
+    // move completed items to the top of Done; move un-done items out of Done to the top of Today
+    const fromName = model.sections[currentSection].name;
+    const targetName = done ? 'Done' : 'Today';
+    const targetIdx = findSection(lines, targetName);
+    if (targetIdx >= 0 && fromName.toLowerCase() !== targetName.toLowerCase()) {
+      const chunk = lines.splice(it.line, end - it.line + 1);
+      const insertAt = findSection(lines, targetName) + 1;
+      lines.splice(insertAt, 0, ...chunk);
+    }
+    await commit(lines.join('\n'), done ? `Moved to ${targetName}` : `Reopened in ${targetName}`);
+  }
+
+  async function toggleSub(line) {
+    const lines = model.lines.slice();
+    const m = RX_ITEM.exec(lines[line]);
+    lines[line] = setMarker(lines[line], m[2] === ' ');
+    await commit(lines.join('\n'), null);
+  }
+
+  function addTask({ title, tag, sectionName, note }) {
+    const lines = model.lines.slice();
+    let idx = findSection(lines, sectionName);
+    if (idx < 0) { lines.push('', `## ${sectionName}`); idx = lines.length - 1; }
+    const body = `**[${tag}] ${title}**` + (note ? ` - ${note}` : '');
+    lines.splice(idx + 1, 0, `- [ ] ${body}`);
+    return commit(lines.join('\n'), 'Added');
+  }
+
+  let lastText = null;
+  async function commit(next, msg) {
+    if (busy) return;
+    const prev = text;
+    lastText = prev;
+    applyLocal(next);
+    if (msg) toast(msg, async () => { await commit(prev, null); });
+    try {
+      await upload(next);
+    } catch (e) {
+      if (e.status === 409) {
+        toast('File changed elsewhere, reloading');
+        await load(true);
+      } else {
+        setStatus('err', 'Save failed');
+        applyLocal(prev);
+        toast(e.message || 'Save failed');
+      }
+    }
+  }
+  function applyLocal(next) {
+    text = next;
+    model = parse(text);
+    store.set(LS.cache, { text, rev, at: Date.now() });
+    render();
+  }
+
+  // ---------- dropbox ----------
+  const tokens = () => store.get(LS.tokens);
+  const appKey = () => store.get(LS.appKey, '');
+  const filePath = () => store.get(LS.path, '/TASKS.md');
+
+  function b64url(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  async function startAuth() {
+    const key = $('appKey').value.trim();
+    if (!key) { toast('Enter your Dropbox app key first'); return; }
+    store.set(LS.appKey, key);
+    store.set(LS.path, $('filePath').value.trim() || '/TASKS.md');
+    const rnd = crypto.getRandomValues(new Uint8Array(48));
+    const verifier = b64url(rnd);
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    store.set(LS.verifier, verifier);
+    const u = new URL('https://www.dropbox.com/oauth2/authorize');
+    u.search = new URLSearchParams({
+      client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256',
+      redirect_uri: redirectUri, token_access_type: 'offline',
+    });
+    location.href = u.toString();
+  }
+  async function finishAuth(code) {
+    const verifier = store.get(LS.verifier);
+    if (!verifier) throw new Error('Auth state lost, try connecting again');
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, grant_type: 'authorization_code', code_verifier: verifier, client_id: appKey(), redirect_uri: redirectUri }),
+    });
+    if (!r.ok) throw new Error('Token exchange failed: ' + await r.text());
+    saveTokens(await r.json());
+    store.del(LS.verifier);
+  }
+  function saveTokens(j) {
+    const t = tokens() || {};
+    store.set(LS.tokens, {
+      access: j.access_token,
+      refresh: j.refresh_token || t.refresh,
+      exp: Date.now() + (j.expires_in - 60) * 1000,
+    });
+  }
+  async function accessToken() {
+    const t = tokens();
+    if (!t) throw Object.assign(new Error('Not connected'), { noauth: true });
+    if (Date.now() < t.exp) return t.access;
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: appKey() }),
+    });
+    if (!r.ok) { store.del(LS.tokens); throw Object.assign(new Error('Session expired, connect again'), { noauth: true }); }
+    saveTokens(await r.json());
+    return tokens().access;
+  }
+  async function download() {
+    const tok = await accessToken();
+    const r = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tok, 'Dropbox-API-Arg': JSON.stringify({ path: filePath() }) },
+    });
+    if (!r.ok) throw Object.assign(new Error('Download failed: ' + await r.text()), { status: r.status });
+    const meta = r.headers.get('dropbox-api-result');
+    const body = await r.text();
+    let newRev = meta ? JSON.parse(meta).rev : null;
+    if (!newRev) {
+      const m = await fetch('https://api.dropboxapi.com/2/files/get_metadata', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath() }),
+      });
+      if (m.ok) newRev = (await m.json()).rev;
+    }
+    return { body, rev: newRev };
+  }
+  async function upload(content) {
+    busy = true; setStatus('busy', 'Saving');
+    try {
+      const tok = await accessToken();
+      const mode = rev ? { '.tag': 'update', update: rev } : 'overwrite';
+      const r = await fetch('https://content.dropboxapi.com/2/files/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + tok,
+          'Content-Type': 'application/octet-stream',
+          'Dropbox-API-Arg': JSON.stringify({ path: filePath(), mode, autorename: false, mute: true }),
+        },
+        body: new Blob([content], { type: 'text/plain' }),
+      });
+      if (!r.ok) throw Object.assign(new Error('Upload failed: ' + await r.text()), { status: r.status });
+      rev = (await r.json()).rev;
+      store.set(LS.cache, { text: content, rev, at: Date.now() });
+      setStatus('ok', 'Saved');
+    } finally { busy = false; }
+  }
+
+  async function load(quiet) {
+    if (!tokens()) { setStatus('', 'Not connected'); return; }
+    setStatus('busy', 'Syncing');
+    try {
+      const { body, rev: r } = await download();
+      rev = r;
+      text = body;
+      model = parse(text);
+      store.set(LS.cache, { text, rev, at: Date.now() });
+      render();
+      setStatus('ok', 'Up to date');
+    } catch (e) {
+      setStatus('err', e.noauth ? 'Not connected' : 'Offline');
+      if (!quiet) toast(e.message);
+    }
+  }
+
+  function setStatus(kind, msg) {
+    const s = $('status');
+    s.className = 'status ' + kind;
+    $('statusText').textContent = msg;
+  }
+
+  // ---------- sheets / toast ----------
+  let toastTimer = null;
+  function toast(msg, undo) {
+    $('toastText').textContent = msg;
+    const a = $('toastAction');
+    a.hidden = !undo;
+    a.onclick = () => { hideToast(); undo && undo(); };
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, undo ? 5000 : 2800);
+  }
+  function hideToast() { $('toast').classList.remove('show'); }
+
+  function openSheet(id) { $('scrim').classList.add('show'); $(id).classList.add('show'); }
+  function closeSheets() { $('scrim').classList.remove('show'); document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show')); }
+  $('scrim').onclick = closeSheets;
+
+  // add sheet
+  let addTag = null, addSection = null;
+  function openAdd() {
+    if (!model) { toast('Connect Dropbox first'); openSettings(); return; }
+    const secs = model.sections.map(s => s.name);
+    addSection = secs[currentSection] || secs[0];
+    const single = [...activeFilters];
+    addTag = single.length === 1 ? (KNOWN_TAGS.find(t => t.toLowerCase() === single[0]) || single[0]) : (addTag || KNOWN_TAGS[0]);
+    const tagsEl = $('addTags'); tagsEl.innerHTML = '';
+    KNOWN_TAGS.forEach(t => {
+      const c = document.createElement('button');
+      c.className = 'chip' + (t === addTag ? ' on' : '');
+      c.style.setProperty('--c', tagColor(t));
+      c.innerHTML = `<span class="swatch"></span>${t}`;
+      c.onclick = () => { addTag = t; [...tagsEl.children].forEach(x => x.classList.toggle('on', x === c)); };
+      tagsEl.appendChild(c);
+    });
+    const secEl = $('addSections'); secEl.innerHTML = '';
+    secs.filter(s => s.toLowerCase() !== 'done').forEach(s => {
+      const c = document.createElement('button');
+      c.className = 'chip' + (s === addSection ? ' on' : '');
+      c.textContent = s;
+      c.onclick = () => { addSection = s; [...secEl.children].forEach(x => x.classList.toggle('on', x === c)); };
+      secEl.appendChild(c);
+    });
+    $('addTitle').value = ''; $('addNote').value = '';
+    openSheet('addSheet');
+    setTimeout(() => $('addTitle').focus(), 250);
+  }
+  $('fab').onclick = openAdd;
+  $('addCancel').onclick = closeSheets;
+  $('addSave').onclick = async () => {
+    const title = $('addTitle').value.trim();
+    if (!title) { $('addTitle').focus(); return; }
+    closeSheets();
+    await addTask({ title, tag: addTag, sectionName: addSection, note: $('addNote').value.trim() });
+    const i = model.sections.findIndex(s => s.name === addSection);
+    if (i >= 0) goTo(i);
+  };
+  $('addTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('addSave').click(); } });
+
+  // settings sheet
+  function openSettings() {
+    $('appKey').value = appKey();
+    $('filePath').value = filePath();
+    const t = tokens();
+    $('settingsHelp').textContent = t
+      ? 'Connected. Reading and writing ' + filePath() + '.'
+      : 'Create an app at dropbox.com/developers/apps (Scoped access, Full Dropbox, permissions files.content.read and files.content.write), add the redirect URI below, then paste the app key here.';
+    $('btnSignOut').style.display = t ? '' : 'none';
+    openSheet('settingsSheet');
+  }
+  $('btnSettings').onclick = openSettings;
+  $('settingsClose').onclick = closeSheets;
+  $('btnConnect').onclick = startAuth;
+  $('btnSignOut').onclick = () => { store.del(LS.tokens); store.del(LS.cache); text = ''; model = null; rev = null; closeSheets(); $('pages').innerHTML = ''; $('tabs').innerHTML = ''; $('chips').innerHTML = ''; setStatus('', 'Not connected'); };
+  $('btnRefresh').onclick = () => load(false);
+
+  // ---------- boot ----------
+  (async () => {
+    // show cached content immediately
+    const cache = store.get(LS.cache);
+    if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('code')) {
+      history.replaceState({}, '', redirectUri);
+      try { await finishAuth(params.get('code')); toast('Connected to Dropbox'); }
+      catch (e) { toast(e.message); }
+    } else if (params.get('error')) {
+      history.replaceState({}, '', redirectUri);
+      toast('Dropbox said: ' + (params.get('error_description') || params.get('error')));
+    }
+
+    if (!tokens() && !cache) openSettings();
+    await load(true);
+
+    // refresh when coming back to the app
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !busy) load(true); });
+    window.addEventListener('resize', () => { if (model) $('pages').scrollLeft = currentSection * $('pages').clientWidth; });
+  })();
+})();
+</script>
+</body>
+</html>
