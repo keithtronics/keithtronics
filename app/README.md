@@ -6,7 +6,8 @@ A swipeable, filterable view of a Markdown task list that lives in Dropbox, runn
 - **Filter by tag.** A chip for every `[Tag]` that appears at the start of items, labeled with its first four letters, most used first. Tap to filter, tap again to clear, tap several to combine. Colors are assigned on first sight and stay stable.
 - **Check things off.** Tapping a checkbox writes back to the file. A completed top-level item slides away, is struck through, and lands at the top of Done. Every change has a six-second Undo. Un-checking something in Done puts it back where it came from (the app remembers), or asks which section if it doesn't know. Subtask checkboxes flip in place.
 - **Add with the floating button.** Title, tag, section and an optional note. It lands at the top of the chosen section as `- [ ] **[Tag] Title** - note`.
-- **Reads offline.** The last copy is cached on the phone and refreshed on every open. Pull down to refresh, or tap the status text.
+- **Works offline.** The last copy is cached on the phone and refreshed on every open. Pull down to refresh, or tap the status text. Edits made without signal queue up (the status says "Offline · 2 pending") and land when the connection is back. Each edit is stored as an operation that finds its item by content, so if the file changed elsewhere in the meantime the edits are replayed onto the new copy instead of being dropped; an edit whose item no longer exists is skipped with a note.
+- **Swipe a sheet down** to dismiss it.
 - **Settings are hidden.** Tap the word Bureau to open them (file path, sign out).
 - **Home Screen widget.** The same script, added as a Scriptable widget, shows the open items of the first section. Tapping it opens the app.
 

@@ -352,7 +352,7 @@
   </div>
   <div class="btnrow">
     <button class="btn quiet" id="addCancel">Cancel</button>
-    <button class="btn primary" id="addSave">Add to top of section</button>
+    <button class="btn primary" id="addSave">Add</button>
   </div>
 </section>
 
@@ -415,6 +415,7 @@
     tagOrder: 'tasks.tagOrder',
     lastTag: 'tasks.lastTag',
     origins: 'tasks.origins',
+    pending: 'tasks.pending',
   };
   // When a native host (the Scriptable script) embeds this page, it injects window.__host and
   // window.__hostState before the page runs, and drains messages the page leaves in window.__outbox.
@@ -474,7 +475,6 @@
   let model = null;    // parsed sections
   let activeFilters = new Set(store.get(LS.filters, []));
   let currentSection = store.get(LS.section, 0);
-  let busy = false;
 
   // ---------- markdown model ----------
   // Lines are kept verbatim; every item remembers its line index so edits are surgical.
@@ -610,8 +610,8 @@
         </div>
       </div>`;
     el.querySelector('.row > .box').onclick = e => { e.stopPropagation(); toggleItem(it, el); };
-    el.querySelectorAll('.row.sub .box').forEach(b => {
-      b.onclick = e => { e.stopPropagation(); toggleSub(Number(b.closest('.row.sub').dataset.line)); };
+    el.querySelectorAll('.row.sub .box').forEach((b, k) => {
+      b.onclick = e => { e.stopPropagation(); toggleSub(it, it.subs[k]); };
     });
     el.onclick = e => { if (e.target.closest('a')) return; el.classList.toggle('open'); };
     return el;
@@ -674,78 +674,150 @@
     return name && sectionNames().find(s => s.toLowerCase() === name.toLowerCase()) || null;
   }
 
+  // ---------- operations ----------
+  // Every edit is a small operation that finds its target by content, not by line number,
+  // so it can be applied again to a fresh copy of the file. That is what lets edits made
+  // offline, or against a copy that changed elsewhere, replay instead of being lost.
+  //   sub    { item, text, done }      set one subtask's marker
+  //   item   { key, done, to }         set a top-level item's marker (subtasks too when completing), move to a section
+  //   add    { title, tag, section, note }
+  //   remove { key }                   undo of add
+  function findItem(m, key) {
+    for (const s of m.sections) for (const it of s.items) if (itemKey(it) === key) return { it, section: s };
+    return null;
+  }
+  function blockEnd(it) { return it.subs.length ? it.subs[it.subs.length - 1].line : it.line; }
+
+  function applyOp(src, op) {
+    const m = parse(src.join('\n'));
+    const lines = src.slice();
+    if (op.op === 'sub') {
+      const f = findItem(m, op.item); if (!f) return null;
+      const sub = f.it.subs.find(s => s.text === op.text); if (!sub) return null;
+      lines[sub.line] = setMarker(lines[sub.line], op.done);
+      return lines;
+    }
+    if (op.op === 'item') {
+      const f = findItem(m, op.key); if (!f) return null;
+      const it = f.it, end = blockEnd(it);
+      const mm = RX_ITEM.exec(lines[it.line]);
+      lines[it.line] = setMarker(`${mm[1]}- [ ] ${restyleTop(mm[3], op.done)}`, op.done);
+      if (op.done) it.subs.forEach(s => { lines[s.line] = setMarker(lines[s.line], true); });
+      if (op.to && f.section.name.toLowerCase() !== op.to.toLowerCase() && findSection(lines, op.to) >= 0) {
+        const chunk = lines.splice(it.line, end - it.line + 1);
+        lines.splice(findSection(lines, op.to) + 1, 0, ...chunk);
+      }
+      return lines;
+    }
+    if (op.op === 'add') {
+      const key = (op.tag + '|' + op.title).toLowerCase();
+      if (findItem(m, key)) return lines;          // already there (a replay after a save that did land)
+      let idx = findSection(lines, op.section);
+      if (idx < 0) { lines.push('', `## ${op.section}`); idx = lines.length - 1; }
+      lines.splice(idx + 1, 0, `- [ ] **[${op.tag}] ${op.title}**` + (op.note ? ` - ${op.note}` : ''));
+      return lines;
+    }
+    if (op.op === 'remove') {
+      const f = findItem(m, op.key); if (!f) return lines;
+      lines.splice(f.it.line, blockEnd(f.it) - f.it.line + 1);
+      return lines;
+    }
+    return null;
+  }
+  function inverse(op, ctx) {
+    if (op.op === 'sub') return { op: 'sub', item: op.item, text: op.text, done: !op.done };
+    if (op.op === 'item') return { op: 'item', key: op.key, done: !op.done, to: ctx.from || null };
+    if (op.op === 'add') return { op: 'remove', key: (op.tag + '|' + op.title).toLowerCase() };
+    return null;
+  }
+
   async function toggleItem(it, el) {
     const fromName = model.sections[currentSection].name;
     const done = !it.done;
     if (done) {
       if (!isDone(fromName)) rememberOrigin(it, fromName);
-      return moveItem(it, true, isDone(fromName) ? null : 'Done', el);
+      return runItem(it, true, isDone(fromName) ? null : 'Done', fromName, el);
     }
-    if (!isDone(fromName)) return moveItem(it, false, null, el);
+    if (!isDone(fromName)) return runItem(it, false, null, fromName, el);
     const origin = originOf(it);
-    if (origin) return moveItem(it, false, origin, el);
+    if (origin) return runItem(it, false, origin, fromName, el);
     openReopen(it, el);
   }
-
-  // Flip an item's marker (and its subtasks when completing) and optionally move its block
-  // to the top of another section.
-  async function moveItem(it, done, targetName, el) {
-    if (busy) return;
-    const lines = model.lines.slice();
-    const block = [it.line, ...it.subs.map(s => s.line)];
-    const end = block[block.length - 1];
-    const m = RX_ITEM.exec(lines[it.line]);
-    lines[it.line] = setMarker(`${m[1]}- [ ] ${restyleTop(m[3], done)}`, done);
-    if (done) it.subs.forEach(s => { lines[s.line] = setMarker(lines[s.line], true); });
+  async function runItem(it, done, to, from, el) {
     let msg = done ? 'Completed' : 'Reopened';
-    if (targetName && findSection(lines, targetName) >= 0) {
-      const chunk = lines.splice(it.line, end - it.line + 1);
-      lines.splice(findSection(lines, targetName) + 1, 0, ...chunk);
-      msg = done ? 'Moved to ' + targetName : 'Reopened in ' + targetName;
+    if (to && to.toLowerCase() !== from.toLowerCase()) {
+      msg = done ? 'Moved to ' + to : 'Reopened in ' + to;
       if (el) { el.classList.add('leaving'); await wait(190); }
     }
-    await commit(lines.join('\n'), msg);
+    return commit({ op: 'item', key: itemKey(it), done, to }, msg, { from });
   }
-
-  async function toggleSub(line) {
-    const lines = model.lines.slice();
-    const m = RX_ITEM.exec(lines[line]);
-    lines[line] = setMarker(lines[line], m[2] === ' ');
-    await commit(lines.join('\n'), null);
+  function toggleSub(it, sub) {
+    return commit({ op: 'sub', item: itemKey(it), text: sub.text, done: !sub.done }, null);
   }
-
   function addTask({ title, tag, sectionName, note }) {
-    const lines = model.lines.slice();
-    let idx = findSection(lines, sectionName);
-    if (idx < 0) { lines.push('', `## ${sectionName}`); idx = lines.length - 1; }
-    const body = `**[${tag}] ${title}**` + (note ? ` - ${note}` : '');
-    lines.splice(idx + 1, 0, `- [ ] ${body}`);
-    return commit(lines.join('\n'), 'Added');
+    return commit({ op: 'add', title, tag, section: sectionName, note }, 'Added');
   }
 
-  async function commit(next, msg) {
-    if (busy) return;
-    const prev = text;
-    applyLocal(next);
-    if (msg) toast(msg, async () => { await commit(prev, null); });
-    try {
-      await upload(next);
-    } catch (e) {
-      if (e.status === 409) {
-        toast('File changed elsewhere, reloading');
-        await load(true);
-      } else {
-        setStatus('err', 'Save failed');
-        applyLocal(prev);
-        toast(e.message || 'Save failed');
-      }
-    }
+  // Apply locally right away, remember the operation, then try to save. If saving fails the
+  // operation waits in the queue and is retried when the app wakes, goes online, or refreshes.
+  let pending = store.get(LS.pending, []);
+  const persistPending = () => store.set(LS.pending, pending);
+  async function commit(op, msg, ctx = {}) {
+    const next = applyOp(model.lines, op);
+    if (!next) { toast('Could not find that item, refreshing'); return load(true); }
+    applyLocal(next.join('\n'));
+    pending.push(op); persistPending();
+    if (msg) toast(msg, () => commit(inverse(op, ctx), null));
+    flush();
   }
   function applyLocal(next) {
     text = next;
     model = parse(text);
     store.set(LS.cache, { text, rev, at: Date.now() });
     render();
+  }
+
+  // Upload what we have. On a conflict (the file changed elsewhere), fetch the new copy,
+  // replay the queued operations on top of it, and upload once more.
+  let flushing = false;
+  async function flush() {
+    if (flushing || !pending.length || !tokens()) return;
+    flushing = true;
+    setStatus('busy', 'Saving');
+    try {
+      while (pending.length) {
+        const snapshot = text, count = pending.length;
+        try {
+          await upload(snapshot);
+        } catch (e) {
+          if (!e.conflict) throw e;
+          await rebase();
+          await upload(text);
+          pending = []; persistPending();
+          break;
+        }
+        pending.splice(0, count); persistPending();
+      }
+      setStatus('ok', 'Saved');
+    } catch (e) {
+      if (e.noauth) setStatus('err', 'Not connected');
+      else if (e.conflict) setStatus('err', `Conflict · ${pending.length} pending`);
+      else if (e.offline) setStatus('err', `Offline · ${pending.length} pending`);
+      else { setStatus('err', `Not saved · ${pending.length} pending`); toast(e.message); }
+    } finally { flushing = false; }
+  }
+  async function rebase() {
+    const { body, rev: r } = await download();
+    rev = r;
+    let lines = body.split('\n'), dropped = 0;
+    const kept = [];
+    for (const op of pending) {
+      const n = applyOp(lines, op);
+      if (n) { lines = n; kept.push(op); } else dropped++;
+    }
+    pending = kept; persistPending();
+    applyLocal(lines.join('\n'));
+    if (dropped) toast(`${dropped} change${dropped > 1 ? 's' : ''} no longer applied`);
   }
 
   // ---------- dropbox ----------
@@ -803,22 +875,23 @@
     const t = tokens();
     if (!t) throw Object.assign(new Error('Not connected'), { noauth: true });
     if (Date.now() < t.exp) return t.access;
-    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    const r = await netFetch('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: appKey() }),
     });
+    if (r.status >= 500) throw Object.assign(new Error('Dropbox unavailable'), { offline: true });
     if (!r.ok) { store.del(LS.tokens); throw Object.assign(new Error('Session expired, connect again'), { noauth: true }); }
     saveTokens(await r.json());
     return tokens().access;
   }
   async function download() {
     const tok = await accessToken();
-    const r = await fetch('https://content.dropboxapi.com/2/files/download', {
+    const r = await netFetch('https://content.dropboxapi.com/2/files/download', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + tok, 'Dropbox-API-Arg': JSON.stringify({ path: filePath() }) },
     });
-    if (!r.ok) throw Object.assign(new Error('Download failed: ' + await r.text()), { status: r.status });
+    if (!r.ok) throw Object.assign(new Error('Download failed: ' + await r.text()), { status: r.status, offline: r.status >= 500 });
     const meta = r.headers.get('dropbox-api-result');
     const body = await r.text();
     let newRev = meta ? JSON.parse(meta).rev : null;
@@ -831,41 +904,54 @@
     }
     return { body, rev: newRev };
   }
+  // A failed fetch (no network) is tagged offline; a Dropbox 409 whose body says "conflict"
+  // is a revision mismatch. Both keep the queue; only the second one triggers a rebase.
+  async function netFetch(url, init) {
+    try { return await fetch(url, init); }
+    catch (e) { throw Object.assign(new Error('No connection'), { offline: true }); }
+  }
   async function upload(content) {
-    busy = true; setStatus('busy', 'Saving');
-    try {
-      const tok = await accessToken();
-      const mode = rev ? { '.tag': 'update', update: rev } : 'overwrite';
-      const r = await fetch('https://content.dropboxapi.com/2/files/upload', {
-        method: 'POST',
-        headers: {
-          Authorization: 'Bearer ' + tok,
-          'Content-Type': 'application/octet-stream',
-          'Dropbox-API-Arg': JSON.stringify({ path: filePath(), mode, autorename: false, mute: true }),
-        },
-        body: new Blob([content], { type: 'text/plain' }),
+    const tok = await accessToken();
+    const mode = rev ? { '.tag': 'update', update: rev } : 'overwrite';
+    const r = await netFetch('https://content.dropboxapi.com/2/files/upload', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + tok,
+        'Content-Type': 'application/octet-stream',
+        'Dropbox-API-Arg': JSON.stringify({ path: filePath(), mode, autorename: false, mute: true }),
+      },
+      body: new Blob([content], { type: 'text/plain' }),
+    });
+    if (!r.ok) {
+      const body = await r.text();
+      throw Object.assign(new Error('Upload failed: ' + body), {
+        status: r.status,
+        conflict: r.status === 409 && /conflict/.test(body),
+        offline: r.status >= 500 || r.status === 429,
       });
-      if (!r.ok) throw Object.assign(new Error('Upload failed: ' + await r.text()), { status: r.status });
-      rev = (await r.json()).rev;
-      store.set(LS.cache, { text: content, rev, at: Date.now() });
-      setStatus('ok', 'Saved');
-    } finally { busy = false; }
+    }
+    rev = (await r.json()).rev;
+    store.set(LS.cache, { text: content, rev, at: Date.now() });
   }
 
   async function load(quiet) {
     if (!tokens()) { setStatus('', 'Not connected'); return; }
+    if (flushing) return;
     setStatus('busy', 'Syncing');
     try {
+      if (pending.length) {                    // bring the remote copy in under the queued edits, then save
+        await rebase();
+        await flush();
+        return;
+      }
       const { body, rev: r } = await download();
       rev = r;
-      text = body;
-      model = parse(text);
-      store.set(LS.cache, { text, rev, at: Date.now() });
-      render();
+      applyLocal(body);
       setStatus('ok', 'Up to date');
     } catch (e) {
-      setStatus('err', e.noauth ? 'Not connected' : 'Offline');
-      if (!quiet) toast(e.message);
+      if (e.noauth) setStatus('err', 'Not connected');
+      else setStatus('err', pending.length ? `Offline · ${pending.length} pending` : 'Offline');
+      if (!quiet && !e.offline) toast(e.message);
     }
   }
 
@@ -895,8 +981,36 @@
   function hideToast() { $('toast').classList.remove('show'); }
 
   function openSheet(id) { $('scrim').classList.add('show'); $(id).classList.add('show'); }
-  function closeSheets() { $('scrim').classList.remove('show'); document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show')); }
+  function closeSheets() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    $('scrim').classList.remove('show');
+    document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show'));
+  }
   $('scrim').onclick = closeSheets;
+
+  // Swipe a sheet down to dismiss it. Follows the finger, snaps back on a short drag.
+  document.querySelectorAll('.sheet').forEach(sheet => {
+    let y0 = null, dy = 0;
+    sheet.addEventListener('touchstart', e => {
+      if (sheet.scrollTop > 0 || e.target.closest('textarea')) return;
+      y0 = e.touches[0].clientY; dy = 0;
+    }, { passive: true });
+    sheet.addEventListener('touchmove', e => {
+      if (y0 == null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      sheet.style.transition = 'none';
+      sheet.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    const end = () => {
+      if (y0 == null) return;
+      y0 = null;
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      if (dy > 90) closeSheets();
+    };
+    sheet.addEventListener('touchend', end);
+    sheet.addEventListener('touchcancel', end);
+  });
 
   function chipRow(el, names, selected, onPick, colorFor) {
     el.innerHTML = '';
@@ -945,7 +1059,7 @@
     chipRow($('reopenSections'), sectionNames().filter(s => !isDone(s)), null, async name => {
       closeSheets();
       rememberOrigin(it, name);
-      await moveItem(it, false, name, el);
+      await runItem(it, false, name, 'Done', el);
     });
     openSheet('reopenSheet');
   }
@@ -1052,11 +1166,14 @@
     const cache = store.get(LS.cache);
     if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }
 
+    if (pending.length) setStatus('err', `Offline · ${pending.length} pending`);
     if (!tokens() && !cache) openSettings();
     await load(true);
 
-    // refresh when coming back to the app
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !busy) load(true); });
+    // refresh when coming back to the app; retry queued edits when the network returns or on a timer
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(true); });
+    window.addEventListener('online', () => load(true));
+    setInterval(() => { if (pending.length && !flushing && document.visibilityState === 'visible') load(true); }, 20000);
     window.addEventListener('resize', () => { if (model) $('pages').scrollLeft = currentSection * $('pages').clientWidth; });
   })();
 })();
