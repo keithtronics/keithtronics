@@ -35,7 +35,7 @@ If the file is not at `/TASKS.md`, change the path in the gear sheet.
 
 ### 4. Make it feel like an app
 
-- **Home Screen icon.** In the Shortcuts app, make a shortcut with the single Scriptable action **Run Script → Tasks**, then use the share button's **Add to Home Screen** and pick an icon.
+- **Home Screen icon.** In the Shortcuts app, make a shortcut with the single Scriptable action **Run Script → Tasks** (turn **Run In App** on; the script hands off to the app anyway if you forget), then use the share button's **Add to Home Screen** and pick an icon.
 - **Widget.** Add a Scriptable widget to the Home Screen, long-press it, choose **Tasks** as the script. Small shows three items, medium five, large ten.
 
 `FULLSCREEN` at the top of the script controls whether the page fills the screen (default) or shows Scriptable's bar with a Done button.

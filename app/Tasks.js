@@ -173,6 +173,12 @@ async function pump(wv, state) {
 async function main() {
   const state = readState();
   if (config.runsInWidget) { widget(state); return; }
+  if (!config.runsInApp) {
+    // Launched from Shortcuts, Siri or a share sheet: those contexts cannot present a web view,
+    // so hand off to the Scriptable app, which reruns this script properly.
+    Safari.open(URLScheme.forRunningScript());
+    return;
+  }
 
   let tokens = readTokens();
   if (!tokens) {
