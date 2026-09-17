@@ -8,15 +8,15 @@ This document provides guidance for AI assistants working with this codebase.
 **Status:** Personal tools
 **Last Updated:** 2026-09-17
 
-Small personal utilities. The first one is a phone-friendly view of Keith's Dropbox `TASKS.md` (see README.md).
+Small personal utilities. The first one is a phone-friendly view of a Dropbox-hosted Markdown task list (see `app/README.md`). This repository is public and doubles as the GitHub profile repo: keep personal data, client names and anything from the task file itself out of it, and do not add a root README that isn't meant for the profile page.
 
 ## Codebase Structure
 
 ```
 keithtronics/
 ├── CLAUDE.md               # This file - AI assistant guidelines
-├── README.md               # Setup and usage for the Tasks app
-└── docs/                   # Served by GitHub Pages (Settings > Pages > /docs)
+└── app/                    # Served privately from the user's own machine, never published
+    ├── README.md           # Setup and usage
     ├── index.html          # Tasks app: single file, vanilla JS, no build step
     ├── manifest.webmanifest
     └── icon.svg
@@ -24,9 +24,9 @@ keithtronics/
 
 ### Tasks app notes
 
-- Talks to Dropbox directly from the browser (OAuth PKCE, `files/download`, `files/upload` with rev check). No server, no secret.
-- The parser in `docs/index.html` depends on the `TASKS.md` conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Keep edits line-surgical so the file never gets reformatted.
-- Smoke-test by serving `docs/` locally and mocking the two `content.dropboxapi.com` endpoints with Playwright.
+- Talks to Dropbox directly from the browser (OAuth PKCE, `files/download`, `files/upload` with rev check). No server, no secret. A pairing code moves the refresh token to a second device so the phone never needs an https redirect.
+- The parser in `app/index.html` depends on the file's conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Tags are read from the file, never hardcoded. Keep edits line-surgical so the file never gets reformatted.
+- Smoke-test by serving `app/` locally and mocking the two `content.dropboxapi.com` endpoints with Playwright.
 
 ### Recommended Directory Structure
 

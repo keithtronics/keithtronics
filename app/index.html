@@ -25,11 +25,12 @@
     --accent-ink: #ffffff;
     --danger: #d64545;
     --check: #22a06b;
-    --tag-humane: #6b4fe0;
-    --tag-philips: #0b7fbf;
-    --tag-arthrex: #d9571d;
-    --tag-personal: #1e9e6a;
-    --tag-other: #6b7080;
+    --tag-1: #6b4fe0;
+    --tag-2: #d9571d;
+    --tag-3: #1e9e6a;
+    --tag-4: #0b7fbf;
+    --tag-5: #c2317a;
+    --tag-6: #8a6d00;
     --shadow: 0 8px 24px rgba(20, 24, 40, .16);
     --radius: 14px;
     --safe-top: env(safe-area-inset-top, 0px);
@@ -47,10 +48,12 @@
       --accent: #6d9bff;
       --accent-ink: #0c1220;
       --check: #3ccb8a;
-      --tag-humane: #a48cff;
-      --tag-philips: #55b3ee;
-      --tag-arthrex: #ff8a4c;
-      --tag-personal: #4fd39a;
+      --tag-1: #a48cff;
+      --tag-2: #ff8a4c;
+      --tag-3: #4fd39a;
+      --tag-4: #55b3ee;
+      --tag-5: #ff7ab8;
+      --tag-6: #e0c04a;
       --shadow: 0 8px 24px rgba(0, 0, 0, .5);
     }
   }
@@ -64,10 +67,12 @@
     --accent: #6d9bff;
     --accent-ink: #0c1220;
     --check: #3ccb8a;
-    --tag-humane: #a48cff;
-    --tag-philips: #55b3ee;
-    --tag-arthrex: #ff8a4c;
-    --tag-personal: #4fd39a;
+    --tag-1: #a48cff;
+    --tag-2: #ff8a4c;
+    --tag-3: #4fd39a;
+    --tag-4: #55b3ee;
+    --tag-5: #ff7ab8;
+    --tag-6: #e0c04a;
     --shadow: 0 8px 24px rgba(0, 0, 0, .5);
   }
 
@@ -327,7 +332,29 @@
   <div class="btnrow">
     <button class="btn primary" id="btnConnect">Connect Dropbox</button>
   </div>
-  <div class="btnrow">
+
+  <h2 style="margin-top:22px">Pair another device</h2>
+  <div id="pairOut" hidden>
+    <p class="help">This device is connected. Copy the code below and paste it on the phone (Universal Clipboard works), or open the link it shows there.</p>
+    <div class="field">
+      <textarea id="pairCode" readonly rows="3" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnCopyPair">Copy code</button>
+      <button class="btn" id="btnCopyPairLink">Copy link</button>
+    </div>
+  </div>
+  <div id="pairIn">
+    <p class="help">Connected on the Mac already? Paste its pairing code here. No Dropbox login needed on this device.</p>
+    <div class="field">
+      <input type="text" id="pairInput" placeholder="tasks1.…" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnPair">Use pairing code</button>
+    </div>
+  </div>
+
+  <div class="btnrow" style="margin-top:18px">
     <button class="btn danger" id="btnSignOut">Sign out</button>
     <button class="btn quiet" id="settingsClose">Close</button>
   </div>
@@ -346,6 +373,8 @@
     cache: 'tasks.cache',
     filters: 'tasks.filters',
     section: 'tasks.section',
+    tagOrder: 'tasks.tagOrder',
+    lastTag: 'tasks.lastTag',
   };
   const store = {
     get(k, fallback = null) { try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
@@ -353,8 +382,25 @@
     del(k) { try { localStorage.removeItem(k); } catch {} },
   };
 
-  const KNOWN_TAGS = ['Humane', 'Philips', 'Arthrex', 'Personal'];
-  const tagColor = t => ({ humane: 'var(--tag-humane)', philips: 'var(--tag-philips)', arthrex: 'var(--tag-arthrex)', personal: 'var(--tag-personal)' })[String(t).toLowerCase()] || 'var(--tag-other)';
+  // Tags come from the file itself: whatever appears as [Tag] at the start of items.
+  // Colors are assigned in order of first appearance and remembered so they stay stable.
+  const PALETTE = ['var(--tag-1)', 'var(--tag-2)', 'var(--tag-3)', 'var(--tag-4)', 'var(--tag-5)', 'var(--tag-6)'];
+  let tagOrder = store.get(LS.tagOrder, []);
+  function tagColor(t) {
+    const key = String(t).toLowerCase();
+    let i = tagOrder.indexOf(key);
+    if (i < 0) { tagOrder.push(key); store.set(LS.tagOrder, tagOrder); i = tagOrder.length - 1; }
+    return PALETTE[i % PALETTE.length];
+  }
+  function allTags() {
+    const counts = new Map();
+    (model?.sections || []).forEach(s => s.items.forEach(it => {
+      if (!it.tag) return;
+      const k = it.tag.toLowerCase();
+      counts.set(k, { name: counts.get(k)?.name || it.tag, n: (counts.get(k)?.n || 0) + 1 });
+    }));
+    return [...counts.values()].sort((a, b) => b.n - a.n).map(x => x.name);
+  }
 
   const $ = id => document.getElementById(id);
   const redirectUri = location.origin + location.pathname;
@@ -435,10 +481,8 @@
       tabs.appendChild(b);
     });
 
-    // chips: known tags first, then anything else that shows up in the file
-    const seen = new Map();
-    model.sections.forEach(s => s.items.forEach(it => { if (it.tag) seen.set(it.tag.toLowerCase(), it.tag); }));
-    const tags = [...KNOWN_TAGS.map(t => t), ...[...seen.values()].filter(t => !KNOWN_TAGS.some(k => k.toLowerCase() === t.toLowerCase()))];
+    // chips: every tag in the file, most used first
+    const tags = allTags();
     chips.innerHTML = '';
     const all = document.createElement('button');
     all.className = 'chip' + (activeFilters.size === 0 ? ' on' : '');
@@ -621,9 +665,37 @@
   function b64url(buf) {
     return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
+  // ---- pairing: move a connection to another device without a second OAuth round trip ----
+  const PAIR_PREFIX = 'tasks1.';
+  function pairCode() {
+    const t = tokens();
+    if (!t?.refresh) return '';
+    const json = JSON.stringify({ k: appKey(), p: filePath(), r: t.refresh });
+    return PAIR_PREFIX + btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function importPair(code) {
+    code = String(code || '').trim();
+    if (!code.startsWith(PAIR_PREFIX)) throw new Error('That does not look like a pairing code');
+    let b = code.slice(PAIR_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    const j = JSON.parse(decodeURIComponent(escape(atob(b))));
+    if (!j.k || !j.r) throw new Error('Pairing code is incomplete');
+    store.set(LS.appKey, j.k);
+    store.set(LS.path, j.p || '/TASKS.md');
+    store.set(LS.tokens, { access: '', refresh: j.r, exp: 0 }); // exp 0 forces a refresh on first use
+  }
+  async function copyText(s) {
+    try { await navigator.clipboard.writeText(s); toast('Copied'); }
+    catch { toast('Copy failed, select the text and copy it by hand'); }
+  }
+
   async function startAuth() {
     const key = $('appKey').value.trim();
     if (!key) { toast('Enter your Dropbox app key first'); return; }
+    if (!window.isSecureContext || !crypto.subtle) {
+      toast('Dropbox login needs https or localhost. Connect on the Mac, then paste its pairing code here.');
+      return;
+    }
     store.set(LS.appKey, key);
     store.set(LS.path, $('filePath').value.trim() || '/TASKS.md');
     const rnd = crypto.getRandomValues(new Uint8Array(48));
@@ -756,10 +828,12 @@
     if (!model) { toast('Connect Dropbox first'); openSettings(); return; }
     const secs = model.sections.map(s => s.name);
     addSection = secs[currentSection] || secs[0];
+    const tags = allTags();
     const single = [...activeFilters];
-    addTag = single.length === 1 ? (KNOWN_TAGS.find(t => t.toLowerCase() === single[0]) || single[0]) : (addTag || KNOWN_TAGS[0]);
+    const pick = k => tags.find(t => t.toLowerCase() === k);
+    addTag = (single.length === 1 && pick(single[0])) || pick(store.get(LS.lastTag, '')) || tags[0] || 'Task';
     const tagsEl = $('addTags'); tagsEl.innerHTML = '';
-    KNOWN_TAGS.forEach(t => {
+    tags.forEach(t => {
       const c = document.createElement('button');
       c.className = 'chip' + (t === addTag ? ' on' : '');
       c.style.setProperty('--c', tagColor(t));
@@ -785,6 +859,7 @@
     const title = $('addTitle').value.trim();
     if (!title) { $('addTitle').focus(); return; }
     closeSheets();
+    store.set(LS.lastTag, addTag.toLowerCase());
     await addTask({ title, tag: addTag, sectionName: addSection, note: $('addNote').value.trim() });
     const i = model.sections.findIndex(s => s.name === addSection);
     if (i >= 0) goTo(i);
@@ -800,11 +875,26 @@
       ? 'Connected. Reading and writing ' + filePath() + '.'
       : 'Create an app at dropbox.com/developers/apps (Scoped access, Full Dropbox, permissions files.content.read and files.content.write), add the redirect URI below, then paste the app key here.';
     $('btnSignOut').style.display = t ? '' : 'none';
+    const code = pairCode();
+    $('pairOut').hidden = !code;
+    $('pairIn').hidden = !!code;
+    $('pairCode').value = code;
+    $('pairInput').value = '';
     openSheet('settingsSheet');
   }
   $('btnSettings').onclick = openSettings;
   $('settingsClose').onclick = closeSheets;
   $('btnConnect').onclick = startAuth;
+  $('btnCopyPair').onclick = () => copyText(pairCode());
+  $('btnCopyPairLink').onclick = () => copyText(redirectUri + '#pair=' + pairCode());
+  $('pairCode').onclick = e => e.target.select();
+  $('btnPair').onclick = async () => {
+    try { importPair($('pairInput').value); }
+    catch (e) { toast(e.message); return; }
+    closeSheets();
+    toast('Paired');
+    await load(false);
+  };
   $('btnSignOut').onclick = () => { store.del(LS.tokens); store.del(LS.cache); text = ''; model = null; rev = null; closeSheets(); $('pages').innerHTML = ''; $('tabs').innerHTML = ''; $('chips').innerHTML = ''; setStatus('', 'Not connected'); };
   $('btnRefresh').onclick = () => load(false);
 
@@ -813,6 +903,14 @@
     // show cached content immediately
     const cache = store.get(LS.cache);
     if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }
+
+    // arriving via a pairing link: #pair=tasks1.…
+    const pairHash = /^#pair=(.+)$/.exec(location.hash);
+    if (pairHash) {
+      history.replaceState({}, '', redirectUri);
+      try { importPair(decodeURIComponent(pairHash[1])); toast('Paired'); }
+      catch (e) { toast(e.message); }
+    }
 
     const params = new URLSearchParams(location.search);
     if (params.get('code')) {
