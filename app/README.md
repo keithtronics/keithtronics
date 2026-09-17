@@ -1,40 +1,46 @@
 # Tasks on the phone
 
-`index.html` is a single-file web app that reads a Markdown task list from Dropbox and shows it the way a phone wants it. It is meant to be served privately, from a machine you control (a local server on the Mac, reached from the phone over the home network or a VPN such as Tailscale). Nothing here is published anywhere, and the task file only ever travels between Dropbox and the browser that is logged in.
+A swipeable, filterable view of a Markdown task list that lives in Dropbox, running entirely on an iPhone inside the free [Scriptable](https://scriptable.app) app. Nothing is hosted anywhere. The page is embedded in one script, Dropbox tokens live in the iOS keychain, and the task file only ever travels between Dropbox and the phone.
 
 - **Swipe between sections.** Each `## Heading` in the file is a page. Swipe or tap the tab.
 - **Filter by tag.** Chips for every `[Tag]` that appears at the start of items, most used first. Tap more than one to combine. Colors are assigned on first sight and stay stable.
 - **Check things off.** Tapping a checkbox writes back to the file. A completed top-level item is struck through and moved to the top of Done. Un-checking something in Done moves it back to the top of Today. Subtask checkboxes flip in place. Every change has a five-second Undo.
 - **Add with the floating button.** Title, tag, section and an optional note. It lands at the top of the chosen section as `- [ ] **[Tag] Title** - note`.
-- **Reads offline.** The last copy is cached on the phone and refreshed whenever the app comes to the foreground.
+- **Reads offline.** The last copy is cached on the phone and refreshed on every open.
+- **Home Screen widget.** The same script, added as a Scriptable widget, shows the open items of the first section. Tapping it opens the app.
 
 The file is never reformatted. Edits change only the lines they touch, and saves use Dropbox's revision check so a change made elsewhere is never overwritten silently.
 
 ## Setup
 
-### 1. Dropbox app (once)
+### 1. Dropbox app key (once, two minutes)
 
 At [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) create an app:
 
-- Scoped access, **Full Dropbox** if the file lives at the root, otherwise App folder.
-- Permissions tab: enable `files.content.read` and `files.content.write`, then submit.
-- Settings tab, **Redirect URIs**: add the exact URL where this page is served on the Mac, for example `http://localhost:3000/app/`. Dropbox accepts plain `http` only for `localhost`; any other host has to be `https`.
-- Copy the **App key**. No secret is needed; the page uses OAuth with PKCE from the browser.
+- Scoped access. **Full Dropbox** if the file lives at the root of your Dropbox, otherwise App folder.
+- Permissions tab: enable `files.content.read` and `files.content.write`, then Submit.
+- Settings tab: copy the **App key**. No secret and no redirect URI are needed; the login uses Dropbox's paste-a-code flow with PKCE.
 
-### 2. Serve the folder
+### 2. Put the script in Scriptable
 
-Put this folder next to whatever already serves the desk, or run any static server in it. The redirect URI you registered has to match the URL the page opens at, including the trailing slash. The gear sheet prints the exact value to register.
+1. Install Scriptable from the App Store.
+2. Open `Tasks.js` from this folder on the phone (AirDrop it, or open it from Dropbox or Files), select all, copy.
+3. In Scriptable, tap **+**, paste, and name the script **Tasks**.
 
-### 3. Connect on the Mac, pair the phone
+### 3. First run
 
-1. Open the page on the Mac at the localhost URL, tap the gear, paste the app key, tap **Connect Dropbox**.
-2. Once connected, the gear sheet shows a **pairing code**. Tap **Copy code**.
-3. On the phone, open the same page at the Mac's address on the network (for example `http://mac-name.local:3000/app/`), tap the gear, paste the code into **Use pairing code**. Universal Clipboard makes the paste a one-step affair. **Copy link** gives a URL that pairs on open, if you prefer AirDropping it.
-4. **Add to Home Screen** from the Safari share sheet. It opens full screen like an app.
+Run the script. It asks for the app key, opens Dropbox so you can allow access, and Dropbox shows a code. Copy the code, come back, and paste it in the prompt (it is prefilled from the clipboard when it looks right). That's it. Later runs go straight to the page.
 
-If the phone reaches the Mac over `https` (Tailscale can issue a certificate with `tailscale serve`), the phone can also log in to Dropbox directly with the same app key, no pairing needed. Register that `https` URL as a second redirect URI.
+If the file is not at `/TASKS.md`, change the path in the gear sheet.
 
-The pairing code carries the Dropbox refresh token for your account, so treat it like a password: paste it, don't post it. **Sign out** on any device clears that device's copy.
+### 4. Make it feel like an app
+
+- **Home Screen icon.** In the Shortcuts app, make a shortcut with the single Scriptable action **Run Script → Tasks**, then use the share button's **Add to Home Screen** and pick an icon.
+- **Widget.** Add a Scriptable widget to the Home Screen, long-press it, choose **Tasks** as the script. Small shows three items, medium five, large ten.
+
+`FULLSCREEN` at the top of the script controls whether the page fills the screen (default) or shows Scriptable's bar with a Done button.
+
+**Sign out** in the gear sheet clears the keychain entry. The next run logs in again.
 
 ## File format the parser expects
 
@@ -52,4 +58,6 @@ Anything that doesn't match is left alone and shown as plain text. Section names
 
 ## Development
 
-No build step. Serve this folder from any static server. The Dropbox calls need a real app key, or mock the two `content.dropboxapi.com` endpoints in a browser automation script.
+`index.html` is the page. `scriptable/Tasks.template.js` is the Scriptable host: login, keychain, the widget, and a small bridge that persists what the page stores. `node app/build.mjs` inlines the page into the template and writes `Tasks.js`, which is committed so it can be copied straight to the phone.
+
+The page also runs in a normal browser for development. Serve this folder from any static server; the gear sheet then shows the same paste-a-code login. Tests mock the two `content.dropboxapi.com` endpoints and the token endpoint with Playwright, and run `Tasks.js` under a stubbed Scriptable runtime whose WebView is a real page.

@@ -9,9 +9,6 @@
 <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
 <meta name="description" content="Swipe through the sections of a Dropbox-hosted TASKS.md, filter by client, check things off and add new ones.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="icon" href="icon.svg">
 <title>Tasks</title>
 <style>
   :root {
@@ -320,7 +317,7 @@
   <div class="grab"></div>
   <h2>Dropbox</h2>
   <p class="help" id="settingsHelp"></p>
-  <div class="field">
+  <div class="field" id="appKeyField">
     <label for="appKey">App key</label>
     <input type="text" id="appKey" placeholder="From dropbox.com/developers/apps" autocomplete="off" autocapitalize="off" spellcheck="false">
   </div>
@@ -328,29 +325,16 @@
     <label for="filePath">File path</label>
     <input type="text" id="filePath" placeholder="/TASKS.md" autocomplete="off" autocapitalize="off" spellcheck="false">
   </div>
-  <p class="help">Redirect URI to register on the app: <code id="redirectUri"></code></p>
-  <div class="btnrow">
-    <button class="btn primary" id="btnConnect">Connect Dropbox</button>
-  </div>
-
-  <h2 style="margin-top:22px">Pair another device</h2>
-  <div id="pairOut" hidden>
-    <p class="help">This device is connected. Copy the code below and paste it on the phone (Universal Clipboard works), or open the link it shows there.</p>
-    <div class="field">
-      <textarea id="pairCode" readonly rows="3" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>
+  <div id="connectBlock">
+    <div class="btnrow">
+      <button class="btn primary" id="btnConnect">1. Open Dropbox to get a code</button>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label for="authCode">2. Paste the code here</label>
+      <input type="text" id="authCode" placeholder="Code shown by Dropbox" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
     <div class="btnrow">
-      <button class="btn" id="btnCopyPair">Copy code</button>
-      <button class="btn" id="btnCopyPairLink">Copy link</button>
-    </div>
-  </div>
-  <div id="pairIn">
-    <p class="help">Connected on the Mac already? Paste its pairing code here. No Dropbox login needed on this device.</p>
-    <div class="field">
-      <input type="text" id="pairInput" placeholder="tasks1.…" autocomplete="off" autocapitalize="off" spellcheck="false">
-    </div>
-    <div class="btnrow">
-      <button class="btn" id="btnPair">Use pairing code</button>
+      <button class="btn primary" id="btnFinish">Finish connecting</button>
     </div>
   </div>
 
@@ -376,10 +360,32 @@
     tagOrder: 'tasks.tagOrder',
     lastTag: 'tasks.lastTag',
   };
+  // When a native host (the Scriptable script) embeds this page, it injects window.__host and
+  // window.__hostState before the page runs, and drains messages the page leaves in window.__outbox.
+  // The host persists tokens and cache on the device; localStorage is only a best-effort extra.
+  const host = window.__host ? {
+    send(msg) {
+      const w = window.__waiter;
+      if (w) { window.__waiter = null; w(msg); }
+      else (window.__outbox || (window.__outbox = [])).push(msg);
+    },
+  } : null;
+  const mem = new Map(Object.entries(window.__hostState || {}));
   const store = {
-    get(k, fallback = null) { try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
-    del(k) { try { localStorage.removeItem(k); } catch {} },
+    get(k, fallback = null) {
+      if (mem.has(k)) return mem.get(k);
+      try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+    },
+    set(k, v) {
+      mem.set(k, v);
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+      host?.send({ type: 'set', key: k, value: v });
+    },
+    del(k) {
+      mem.delete(k);
+      try { localStorage.removeItem(k); } catch {}
+      host?.send({ type: 'del', key: k });
+    },
   };
 
   // Tags come from the file itself: whatever appears as [Tag] at the start of items.
@@ -403,8 +409,6 @@
   }
 
   const $ = id => document.getElementById(id);
-  const redirectUri = location.origin + location.pathname;
-  $('redirectUri').textContent = redirectUri;
 
   // ---------- state ----------
   let text = '';       // full file text
@@ -665,35 +669,13 @@
   function b64url(buf) {
     return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
-  // ---- pairing: move a connection to another device without a second OAuth round trip ----
-  const PAIR_PREFIX = 'tasks1.';
-  function pairCode() {
-    const t = tokens();
-    if (!t?.refresh) return '';
-    const json = JSON.stringify({ k: appKey(), p: filePath(), r: t.refresh });
-    return PAIR_PREFIX + btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-  function importPair(code) {
-    code = String(code || '').trim();
-    if (!code.startsWith(PAIR_PREFIX)) throw new Error('That does not look like a pairing code');
-    let b = code.slice(PAIR_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/');
-    while (b.length % 4) b += '=';
-    const j = JSON.parse(decodeURIComponent(escape(atob(b))));
-    if (!j.k || !j.r) throw new Error('Pairing code is incomplete');
-    store.set(LS.appKey, j.k);
-    store.set(LS.path, j.p || '/TASKS.md');
-    store.set(LS.tokens, { access: '', refresh: j.r, exp: 0 }); // exp 0 forces a refresh on first use
-  }
-  async function copyText(s) {
-    try { await navigator.clipboard.writeText(s); toast('Copied'); }
-    catch { toast('Copy failed, select the text and copy it by hand'); }
-  }
-
+  // Dropbox's no-redirect flow: Dropbox shows the user a code, the user pastes it here.
+  // No redirect URI, so this works from anywhere the page can run. PKCE still applies.
   async function startAuth() {
     const key = $('appKey').value.trim();
     if (!key) { toast('Enter your Dropbox app key first'); return; }
     if (!window.isSecureContext || !crypto.subtle) {
-      toast('Dropbox login needs https or localhost. Connect on the Mac, then paste its pairing code here.');
+      toast('Open this page over https or localhost to log in');
       return;
     }
     store.set(LS.appKey, key);
@@ -705,17 +687,18 @@
     const u = new URL('https://www.dropbox.com/oauth2/authorize');
     u.search = new URLSearchParams({
       client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256',
-      redirect_uri: redirectUri, token_access_type: 'offline',
+      token_access_type: 'offline',
     });
-    location.href = u.toString();
+    window.open(u.toString(), '_blank', 'noopener');
+    setTimeout(() => $('authCode').focus(), 300);
   }
   async function finishAuth(code) {
     const verifier = store.get(LS.verifier);
-    if (!verifier) throw new Error('Auth state lost, try connecting again');
+    if (!verifier) throw new Error('Start with step 1 first');
     const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ code, grant_type: 'authorization_code', code_verifier: verifier, client_id: appKey(), redirect_uri: redirectUri }),
+      body: new URLSearchParams({ code, grant_type: 'authorization_code', code_verifier: verifier, client_id: appKey() }),
     });
     if (!r.ok) throw new Error('Token exchange failed: ' + await r.text());
     saveTokens(await r.json());
@@ -870,32 +853,45 @@
   function openSettings() {
     $('appKey').value = appKey();
     $('filePath').value = filePath();
+    $('authCode').value = '';
     const t = tokens();
-    $('settingsHelp').textContent = t
-      ? 'Connected. Reading and writing ' + filePath() + '.'
-      : 'Create an app at dropbox.com/developers/apps (Scoped access, Full Dropbox, permissions files.content.read and files.content.write), add the redirect URI below, then paste the app key here.';
+    if (host) {
+      $('settingsHelp').textContent = t
+        ? 'Connected. Reading and writing ' + filePath() + '.'
+        : 'Signed out. Close and reopen the app to log in to Dropbox again.';
+      $('appKeyField').hidden = true;
+      $('connectBlock').hidden = true;
+    } else {
+      $('settingsHelp').textContent = t
+        ? 'Connected. Reading and writing ' + filePath() + '.'
+        : 'Create an app at dropbox.com/developers/apps (Scoped access, permissions files.content.read and files.content.write) and paste its app key here. Step 1 opens Dropbox, which shows a code; paste it in step 2.';
+      $('appKeyField').hidden = !!t;
+      $('connectBlock').hidden = !!t;
+    }
     $('btnSignOut').style.display = t ? '' : 'none';
-    const code = pairCode();
-    $('pairOut').hidden = !code;
-    $('pairIn').hidden = !!code;
-    $('pairCode').value = code;
-    $('pairInput').value = '';
     openSheet('settingsSheet');
   }
   $('btnSettings').onclick = openSettings;
   $('settingsClose').onclick = closeSheets;
   $('btnConnect').onclick = startAuth;
-  $('btnCopyPair').onclick = () => copyText(pairCode());
-  $('btnCopyPairLink').onclick = () => copyText(redirectUri + '#pair=' + pairCode());
-  $('pairCode').onclick = e => e.target.select();
-  $('btnPair').onclick = async () => {
-    try { importPair($('pairInput').value); }
+  $('btnFinish').onclick = async () => {
+    const code = $('authCode').value.trim();
+    if (!code) { $('authCode').focus(); return; }
+    try { await finishAuth(code); }
     catch (e) { toast(e.message); return; }
     closeSheets();
-    toast('Paired');
+    toast('Connected to Dropbox');
     await load(false);
   };
-  $('btnSignOut').onclick = () => { store.del(LS.tokens); store.del(LS.cache); text = ''; model = null; rev = null; closeSheets(); $('pages').innerHTML = ''; $('tabs').innerHTML = ''; $('chips').innerHTML = ''; setStatus('', 'Not connected'); };
+  $('filePath').onchange = () => { store.set(LS.path, $('filePath').value.trim() || '/TASKS.md'); };
+  $('btnSignOut').onclick = () => {
+    store.del(LS.tokens); store.del(LS.cache);
+    host?.send({ type: 'signout' });
+    text = ''; model = null; rev = null; closeSheets();
+    $('pages').innerHTML = ''; $('tabs').innerHTML = ''; $('chips').innerHTML = '';
+    setStatus('', 'Not connected');
+    if (host) toast('Signed out. Reopen the app to log in again.');
+  };
   $('btnRefresh').onclick = () => load(false);
 
   // ---------- boot ----------
@@ -903,24 +899,6 @@
     // show cached content immediately
     const cache = store.get(LS.cache);
     if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }
-
-    // arriving via a pairing link: #pair=tasks1.…
-    const pairHash = /^#pair=(.+)$/.exec(location.hash);
-    if (pairHash) {
-      history.replaceState({}, '', redirectUri);
-      try { importPair(decodeURIComponent(pairHash[1])); toast('Paired'); }
-      catch (e) { toast(e.message); }
-    }
-
-    const params = new URLSearchParams(location.search);
-    if (params.get('code')) {
-      history.replaceState({}, '', redirectUri);
-      try { await finishAuth(params.get('code')); toast('Connected to Dropbox'); }
-      catch (e) { toast(e.message); }
-    } else if (params.get('error')) {
-      history.replaceState({}, '', redirectUri);
-      toast('Dropbox said: ' + (params.get('error_description') || params.get('error')));
-    }
 
     if (!tokens() && !cache) openSettings();
     await load(true);

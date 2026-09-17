@@ -14,19 +14,21 @@ Small personal utilities. The first one is a phone-friendly view of a Dropbox-ho
 
 ```
 keithtronics/
-├── CLAUDE.md               # This file - AI assistant guidelines
-└── app/                    # Served privately from the user's own machine, never published
-    ├── README.md           # Setup and usage
-    ├── index.html          # Tasks app: single file, vanilla JS, no build step
-    ├── manifest.webmanifest
-    └── icon.svg
+├── CLAUDE.md                        # This file - AI assistant guidelines
+└── app/                             # Runs on the phone inside Scriptable; never hosted
+    ├── README.md                    # Setup and usage
+    ├── index.html                   # The page: vanilla JS, also runs in a browser for development
+    ├── scriptable/Tasks.template.js # Scriptable host: login, keychain, widget, page bridge
+    ├── build.mjs                    # node app/build.mjs → inlines index.html into Tasks.js
+    └── Tasks.js                     # Generated; committed so it can be copied to the phone
 ```
 
 ### Tasks app notes
 
-- Talks to Dropbox directly from the browser (OAuth PKCE, `files/download`, `files/upload` with rev check). No server, no secret. A pairing code moves the refresh token to a second device so the phone never needs an https redirect.
+- Talks to Dropbox directly (OAuth PKCE with Dropbox's no-redirect paste-a-code flow, `files/download`, `files/upload` with rev check). No server, no secret, no redirect URI.
+- The page talks to its host through `window.__host` / `window.__hostState` (injected) and `window.__outbox` / `window.__waiter` (drained by the host's `evaluateJavaScript` loop). Everything the page stores goes through `store`, which mirrors to the host.
 - The parser in `app/index.html` depends on the file's conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Tags are read from the file, never hardcoded. Keep edits line-surgical so the file never gets reformatted.
-- Smoke-test by serving `app/` locally and mocking the two `content.dropboxapi.com` endpoints with Playwright.
+- After editing `index.html` or the template, run `node app/build.mjs` and commit `Tasks.js`. Test with Playwright: mock the Dropbox endpoints for the browser path, and run `Tasks.js` under stubbed Scriptable globals with a real page as the WebView.
 
 ### Recommended Directory Structure
 
