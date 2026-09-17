@@ -174,8 +174,9 @@ async function main() {
   const state = readState();
   if (config.runsInWidget) { widget(state); return; }
   if (!config.runsInApp) {
-    // Launched from Shortcuts, Siri or a share sheet: those contexts cannot present a web view,
-    // so hand off to the Scriptable app, which reruns this script properly.
+    // Launched from Shortcuts, Siri or a share sheet: those contexts cannot present a web view.
+    // Try to hand off to the app; if the host ignores that, the launcher should use
+    // an "Open URL" action with scriptable:///run/Tasks instead (see README).
     Safari.open(URLScheme.forRunningScript());
     return;
   }
