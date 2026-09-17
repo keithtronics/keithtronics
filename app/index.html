@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bureau">
+<meta name="theme-color" content="#0e1015" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f3f7" media="(prefers-color-scheme: light)">
+<meta name="description" content="Swipe through the sections of a Dropbox-hosted TASKS.md, filter by tag, check things off and add new ones.">
+<title>Bureau</title>
+<style>
+  :root {
+    --bg: #f2f3f7;
+    --surface: #ffffff;
+    --surface-2: #e8eaf0;
+    --surface-3: #dfe2ea;
+    --text: #14161b;
+    --text-2: #4f5563;
+    --muted: #868c9b;
+    --line: rgba(20, 22, 27, .08);
+    --accent: #2f6df6;
+    --accent-ink: #ffffff;
+    --danger: #de4640;
+    --ok: #22a06b;
+    --tag-1: #6b4fe0;
+    --tag-2: #e0611f;
+    --tag-3: #1a9d6a;
+    --tag-4: #0b7fbf;
+    --tag-5: #c8327c;
+    --tag-6: #9a7a00;
+    --shadow-card: 0 1px 2px rgba(20, 22, 27, .04), 0 6px 20px rgba(20, 22, 27, .05);
+    --shadow-pop: 0 18px 50px rgba(20, 22, 27, .22);
+    --r: 18px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1015;
+      --surface: #181b22;
+      --surface-2: #22262f;
+      --surface-3: #2c313c;
+      --text: #eef0f5;
+      --text-2: #b3b9c7;
+      --muted: #737a8a;
+      --line: rgba(255, 255, 255, .07);
+      --accent: #5b8dff;
+      --accent-ink: #0b1225;
+      --danger: #ff6b63;
+      --ok: #3ccb8a;
+      --tag-1: #ab95ff;
+      --tag-2: #ff9155;
+      --tag-3: #4fd39a;
+      --tag-4: #5fb8f0;
+      --tag-5: #ff7fbf;
+      --tag-6: #e3c453;
+      --shadow-card: 0 1px 0 rgba(255, 255, 255, .03);
+      --shadow-pop: 0 18px 50px rgba(0, 0, 0, .6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1015;
+    --surface: #181b22;
+    --surface-2: #22262f;
+    --surface-3: #2c313c;
+    --text: #eef0f5;
+    --text-2: #b3b9c7;
+    --muted: #737a8a;
+    --line: rgba(255, 255, 255, .07);
+    --accent: #5b8dff;
+    --accent-ink: #0b1225;
+    --danger: #ff6b63;
+    --ok: #3ccb8a;
+    --tag-1: #ab95ff;
+    --tag-2: #ff9155;
+    --tag-3: #4fd39a;
+    --tag-4: #5fb8f0;
+    --tag-5: #ff7fbf;
+    --tag-6: #e3c453;
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, .03);
+    --shadow-pop: 0 18px 50px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    display: flex; flex-direction: column;
+    height: 100dvh;
+    touch-action: manipulation;
+  }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; touch-action: manipulation; }
+  input, textarea { font: inherit; color: inherit; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- header ---------------- */
+  header { padding: calc(var(--safe-top) + 14px) 16px 0; flex: 0 0 auto; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 {
+    font-size: 34px; line-height: 1.1; margin: 0; letter-spacing: .01em;
+    font-weight: 200; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none; cursor: pointer;
+  }
+  h1:active { opacity: .6; }
+  .status { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 500; padding: 6px 0 6px 14px; white-space: nowrap; }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .status.ok .dot { background: var(--ok); }
+  .status.busy .dot { background: var(--accent); animation: pulse 1s infinite; }
+  .status.err .dot { background: var(--danger); }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  .tabs {
+    display: flex; gap: 2px; margin-top: 16px; padding: 4px;
+    background: var(--surface-2); border-radius: 14px;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex: 1 0 auto; padding: 8px 12px; border-radius: 11px; white-space: nowrap;
+    color: var(--text-2); font-weight: 600; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .tab .n {
+    font-size: 11px; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px;
+    border-radius: 9px; background: var(--surface-3); color: var(--text-2);
+    display: inline-grid; place-items: center;
+  }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(20, 22, 27, .10), 0 0 0 .5px var(--line); }
+  .tab.active .n { background: var(--accent); color: var(--accent-ink); }
+  .tab .n:empty { display: none; }
+
+  .chips {
+    display: flex; gap: 8px; padding: 12px 16px 8px;
+    overflow-x: auto; scrollbar-width: none; flex: 0 0 auto;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; height: 34px; padding: 0 13px; border-radius: 999px;
+    border: 1.5px solid transparent; background: var(--surface); box-shadow: var(--shadow-card);
+    font-size: 13.5px; font-weight: 600; color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background .15s, color .15s, border-color .15s, transform .1s;
+    --c: var(--accent);
+  }
+  .chip:active { transform: scale(.96); }
+  .chip .swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 22%, transparent); }
+  .chip.on { border-color: color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 13%, var(--surface)); color: color-mix(in srgb, var(--c) 78%, var(--text)); }
+  /* filter row: short uppercase labels that share the width */
+  .chip.filter { flex: 1 1 0; min-width: 64px; height: 32px; padding: 0 10px; border-radius: 11px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .chip.filter .swatch { margin-right: -1px; }
+
+  /* ---------------- pull to refresh ---------------- */
+  .ptr { height: 0; overflow: hidden; flex: 0 0 auto; display: flex; align-items: flex-end; justify-content: center; transition: height .22s ease; }
+  .ptr.pulling { transition: none; }
+  .ptr-icon { width: 24px; height: 24px; margin-bottom: 10px; color: var(--muted); transition: color .15s; }
+  .ptr.ready .ptr-icon { color: var(--accent); }
+  .ptr.refreshing .ptr-icon { color: var(--accent); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------------- pages ---------------- */
+  .pages {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pages::-webkit-scrollbar { display: none; }
+  .page {
+    flex: 0 0 100%; width: 100%; scroll-snap-align: start; scroll-snap-stop: always;
+    overflow-y: auto; padding: 2px 16px calc(var(--safe-bottom) + 110px);
+    -webkit-overflow-scrolling: touch;
+  }
+  .empty { color: var(--muted); text-align: center; padding: 64px 24px; font-size: 15px; }
+  .empty svg { width: 44px; height: 44px; color: var(--surface-3); margin-bottom: 12px; }
+  .empty strong { display: block; color: var(--text-2); font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+
+  .card {
+    background: var(--surface); border-radius: var(--r);
+    padding: 14px 14px 14px 12px; margin: 10px 0;
+    box-shadow: var(--shadow-card);
+    transition: transform .18s ease, opacity .18s ease, box-shadow .18s;
+    --c: var(--accent);
+  }
+  .card.leaving { opacity: 0; transform: translateX(28px) scale(.98); }
+  .card.done { opacity: .55; }
+  .card.done .ttl { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text) 40%, transparent); }
+  .row { display: flex; gap: 12px; align-items: flex-start; }
+  .box {
+    flex: 0 0 auto; width: 26px; height: 26px; margin-top: 2px;
+    border-radius: 50%; border: 2px solid color-mix(in srgb, var(--c) 45%, var(--surface-3));
+    background: transparent; display: grid; place-items: center; color: transparent;
+    transition: background .15s, border-color .15s, transform .15s;
+    position: relative;
+  }
+  .box::after { content: ""; position: absolute; inset: -9px; }   /* larger tap target */
+  .box svg { width: 15px; height: 15px; }
+  .box:active { transform: scale(.9); }
+  .box.on { background: var(--c); border-color: var(--c); color: #fff; animation: pop .22s ease; }
+  @keyframes pop { 0% { transform: scale(.8); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  .main { flex: 1 1 auto; min-width: 0; }
+  .head { display: flex; align-items: center; gap: 10px; min-height: 18px; margin-bottom: 3px; }
+  .tag { font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--c); }
+  .prog { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  .prog i { display: block; width: 34px; height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; }
+  .prog i::before { content: ""; display: block; height: 100%; width: var(--p, 0%); background: var(--c); border-radius: 2px; }
+  .chev { color: var(--muted); display: grid; place-items: center; transition: transform .2s; }
+  .chev svg { width: 14px; height: 14px; }
+  .prog + .chev { margin-left: 0; }
+  .head .chev:only-child, .tag + .chev { margin-left: auto; }
+  .card.open .chev { transform: rotate(180deg); }
+  .ttl { font-weight: 650; font-size: 16px; line-height: 1.32; letter-spacing: -.005em; }
+  .ttl.notag { margin-top: 0; }
+  .note {
+    color: var(--text-2); font-size: 14px; line-height: 1.45; margin-top: 5px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .card.open .note { display: block; -webkit-line-clamp: unset; }
+  .note strong { color: var(--text); font-weight: 650; }
+  .note code, .ttl code, .txt code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
+  .note a, .txt a { color: var(--accent); text-decoration: none; }
+  .subs { margin-top: 10px; display: none; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .card.open .subs { display: flex; }
+  .row.sub { padding: 5px 0; gap: 10px; }
+  .row.sub .box { width: 22px; height: 22px; margin-top: 1px; }
+  .row.sub .box svg { width: 12px; height: 12px; }
+  .row.sub .txt { font-size: 14.5px; line-height: 1.4; color: var(--text); }
+  .row.sub.on .txt { text-decoration: line-through; color: var(--muted); }
+
+  /* ---------------- FAB ---------------- */
+  .fab {
+    position: fixed; right: 20px; bottom: calc(var(--safe-bottom) + 20px); z-index: 5;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: radial-gradient(120% 120% at 30% 22%, color-mix(in srgb, var(--accent) 72%, white) 0%, var(--accent) 52%, color-mix(in srgb, var(--accent) 82%, black) 100%);
+    color: #fff; display: grid; place-items: center;
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 36%, transparent), 0 1px 2px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .28);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .fab:active { transform: scale(.93); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .fab svg { width: 24px; height: 24px; }
+
+  /* ---------------- sheets ---------------- */
+  .scrim { position: fixed; inset: 0; background: rgba(8, 10, 16, .45); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
+    background: var(--surface); border-radius: 24px 24px 0 0;
+    padding: 10px 18px calc(var(--safe-bottom) + 18px);
+    transform: translateY(105%); transition: transform .26s cubic-bezier(.2, .9, .25, 1);
+    max-height: 90dvh; overflow-y: auto; box-shadow: var(--shadow-pop);
+  }
+  .sheet.show { transform: none; }
+  .grab { width: 38px; height: 5px; border-radius: 3px; background: var(--surface-3); margin: 0 auto 16px; }
+  .sheet h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -.01em; font-weight: 800; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px; }
+  .field input[type=text], .field textarea {
+    width: 100%; padding: 13px 14px; border-radius: 14px; border: 1.5px solid transparent;
+    background: var(--surface-2); outline: none; transition: border-color .15s, background .15s;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); background: var(--surface); }
+  .field textarea { min-height: 76px; resize: vertical; }
+  .seg { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 50px; padding: 0 18px; border-radius: 14px; font-weight: 700; background: var(--surface-2);
+    width: 100%; transition: transform .1s, opacity .15s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .btn.quiet { background: transparent; color: var(--text-2); }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: .5; }
+  .btnrow { display: flex; gap: 10px; margin-top: 6px; }
+  .help { font-size: 13.5px; line-height: 1.45; color: var(--text-2); margin: 0 0 14px; }
+  .help code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+
+  /* toast: a compact pill sitting to the left of the FAB, in the page's own colors */
+  .toast {
+    position: fixed; left: 16px; right: calc(20px + 56px + 12px); bottom: calc(var(--safe-bottom) + 26px); z-index: 6;
+    height: 44px; padding: 0 6px 0 16px; border-radius: 22px; overflow: hidden;
+    background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    transform: translateY(10px) scale(.98); opacity: 0; pointer-events: none; transition: transform .2s, opacity .2s;
+    font-size: 14px; font-weight: 600;
+  }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast #toastText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toast button { flex: 0 0 auto; color: var(--accent); font-weight: 800; font-size: 13px; padding: 7px 12px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .toast .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; display: none; }
+  .toast.undo .bar { display: block; }
+  .toast .bar i { display: block; height: 100%; background: var(--accent); opacity: .75; width: 100%; transform-origin: left; animation: drain var(--t, 6s) linear forwards; }
+  @keyframes drain { to { transform: scaleX(0); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <h1 id="title">Bureau</h1>
+    <button class="status" id="status" aria-label="Refresh"><span class="dot"></span><span id="statusText">Not connected</span></button>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+
+<div class="chips" id="chips"></div>
+
+<div class="ptr" id="ptr" aria-hidden="true">
+  <svg class="ptr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+</div>
+
+<main class="pages" id="pages"></main>
+
+<button class="fab" id="fab" aria-label="Add task">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastAction" hidden>Undo</button><span class="bar"><i></i></span></div>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- Add sheet -->
+<section class="sheet" id="addSheet" aria-label="Add task">
+  <div class="grab"></div>
+  <h2>New task</h2>
+  <div class="field">
+    <label for="addTitle">Title</label>
+    <input type="text" id="addTitle" placeholder="What needs doing" autocomplete="off" enterkeyhint="done">
+  </div>
+  <div class="field">
+    <label>Tag</label>
+    <div class="seg" id="addTags"></div>
+  </div>
+  <div class="field">
+    <label>Section</label>
+    <div class="seg" id="addSections"></div>
+  </div>
+  <div class="field">
+    <label for="addNote">Note (optional)</label>
+    <textarea id="addNote" placeholder="Context, who, when"></textarea>
+  </div>
+  <div class="btnrow">
+    <button class="btn quiet" id="addCancel">Cancel</button>
+    <button class="btn primary" id="addSave">Add</button>
+  </div>
+</section>
+
+<!-- Reopen sheet: where should an un-checked item go back to? -->
+<section class="sheet" id="reopenSheet" aria-label="Reopen task">
+  <div class="grab"></div>
+  <h2>Reopen in…</h2>
+  <p class="help" id="reopenTitle"></p>
+  <div class="field"><div class="seg" id="reopenSections"></div></div>
+  <div class="btnrow">
+    <button class="btn quiet" id="reopenCancel">Cancel</button>
+  </div>
+</section>
+
+<!-- Settings sheet -->
+<section class="sheet" id="settingsSheet" aria-label="Settings">
+  <div class="grab"></div>
+  <h2>Dropbox</h2>
+  <p class="help" id="settingsHelp"></p>
+  <div class="field" id="appKeyField">
+    <label for="appKey">App key</label>
+    <input type="text" id="appKey" placeholder="From dropbox.com/developers/apps" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div class="field">
+    <label for="filePath">File path</label>
+    <input type="text" id="filePath" placeholder="/TASKS.md" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  <div id="connectBlock">
+    <div class="btnrow">
+      <button class="btn primary" id="btnConnect">1. Open Dropbox to get a code</button>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label for="authCode">2. Paste the code here</label>
+      <input type="text" id="authCode" placeholder="Code shown by Dropbox" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="btnrow">
+      <button class="btn primary" id="btnFinish">Finish connecting</button>
+    </div>
+  </div>
+
+  <div class="btnrow" style="margin-top:18px">
+    <button class="btn danger" id="btnSignOut">Sign out</button>
+    <button class="btn quiet" id="settingsClose">Close</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- config / storage ----------
+  const LS = {
+    appKey: 'tasks.appKey',
+    path: 'tasks.path',
+    tokens: 'tasks.tokens',
+    verifier: 'tasks.pkceVerifier',
+    cache: 'tasks.cache',
+    filters: 'tasks.filters',
+    section: 'tasks.section',
+    tagOrder: 'tasks.tagOrder',
+    lastTag: 'tasks.lastTag',
+    origins: 'tasks.origins',
+    pending: 'tasks.pending',
+  };
+  // When a native host (the Scriptable script) embeds this page, it injects window.__host and
+  // window.__hostState before the page runs, and drains messages the page leaves in window.__outbox.
+  // The host persists tokens and cache on the device; localStorage is only a best-effort extra.
+  const host = window.__host ? {
+    send(msg) {
+      const w = window.__waiter;
+      if (w) { window.__waiter = null; w(msg); }
+      else (window.__outbox || (window.__outbox = [])).push(msg);
+    },
+  } : null;
+  const mem = new Map(Object.entries(window.__hostState || {}));
+  const store = {
+    get(k, fallback = null) {
+      if (mem.has(k)) return mem.get(k);
+      try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+    },
+    set(k, v) {
+      mem.set(k, v);
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+      host?.send({ type: 'set', key: k, value: v });
+    },
+    del(k) {
+      mem.delete(k);
+      try { localStorage.removeItem(k); } catch {}
+      host?.send({ type: 'del', key: k });
+    },
+  };
+
+  // Tags come from the file itself: whatever appears as [Tag] at the start of items.
+  // Colors are assigned in order of first appearance and remembered so they stay stable.
+  const PALETTE = ['var(--tag-1)', 'var(--tag-2)', 'var(--tag-3)', 'var(--tag-4)', 'var(--tag-5)', 'var(--tag-6)'];
+  let tagOrder = store.get(LS.tagOrder, []);
+  function tagColor(t) {
+    if (!t) return 'var(--accent)';
+    const key = String(t).toLowerCase();
+    let i = tagOrder.indexOf(key);
+    if (i < 0) { tagOrder.push(key); store.set(LS.tagOrder, tagOrder); i = tagOrder.length - 1; }
+    return PALETTE[i % PALETTE.length];
+  }
+  function allTags() {
+    const counts = new Map();
+    (model?.sections || []).forEach(s => s.items.forEach(it => {
+      if (!it.tag) return;
+      const k = it.tag.toLowerCase();
+      counts.set(k, { name: counts.get(k)?.name || it.tag, n: (counts.get(k)?.n || 0) + 1 });
+    }));
+    return [...counts.values()].sort((a, b) => b.n - a.n).map(x => x.name);
+  }
+
+  const $ = id => document.getElementById(id);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- state ----------
+  let text = '';       // full file text
+  let rev = null;      // dropbox rev of `text`
+  let model = null;    // parsed sections
+  let activeFilters = new Set(store.get(LS.filters, []));
+  let currentSection = store.get(LS.section, 0);
+
+  // ---------- markdown model ----------
+  // Lines are kept verbatim; every item remembers its line index so edits are surgical.
+  const RX_ITEM = /^(\s*)- \[( |x|X)\] (.*)$/;
+  const RX_BOLD = /^\*\*\[([^\]]+)\]\s*(.*?)\*\*(?:\s+-\s+(.*))?$/;
+  const RX_STRIKE = /^~~\[([^\]]+)\]\s*(.*?)~~(?:\s+-\s+(.*))?$/;
+  const RX_PLAIN_TAG = /^\[([^\]]+)\]\s*(.*)$/;
+
+  function parse(src) {
+    const lines = src.split('\n');
+    const sections = [];
+    let cur = null, item = null;
+    lines.forEach((line, i) => {
+      const h = /^##\s+(.+?)\s*$/.exec(line);
+      if (h) { cur = { name: h[1], line: i, items: [] }; sections.push(cur); item = null; return; }
+      if (!cur) return;
+      const m = RX_ITEM.exec(line);
+      if (!m) return;
+      const indent = m[1].length, done = m[2] !== ' ', body = m[3];
+      if (indent === 0) {
+        item = { line: i, done, tag: '', title: body, note: '', subs: [], raw: body };
+        let t = RX_BOLD.exec(body) || RX_STRIKE.exec(body);
+        if (t) { item.tag = t[1]; item.title = t[2]; item.note = t[3] || ''; }
+        else { const p = RX_PLAIN_TAG.exec(body); if (p) { item.tag = p[1]; item.title = p[2]; } }
+        cur.items.push(item);
+      } else if (item) {
+        item.subs.push({ line: i, done, text: body });
+      }
+    });
+    return { lines, sections };
+  }
+
+  // ---------- inline markdown ----------
+  const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function inline(s) {
+    let h = esc(s);
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/~~(.+?)~~/g, '<s>$1</s>');
+    h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    return h;
+  }
+
+  // ---------- rendering ----------
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+  const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+  const EMPTY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 5-5"/></svg>';
+
+  function visible(item) {
+    if (activeFilters.size === 0) return true;
+    return activeFilters.has(item.tag.toLowerCase());
+  }
+
+  function render() {
+    if (!model) return;
+    const tabs = $('tabs'), pages = $('pages'), chips = $('chips');
+
+    // tabs
+    tabs.innerHTML = '';
+    model.sections.forEach((s, i) => {
+      const open = s.items.filter(it => !it.done && visible(it)).length;
+      const b = document.createElement('button');
+      b.className = 'tab' + (i === currentSection ? ' active' : '');
+      b.innerHTML = `${esc(s.name)}<span class="n num">${open || ''}</span>`;
+      b.onclick = () => goTo(i);
+      tabs.appendChild(b);
+    });
+
+    // chips: every tag in the file, most used first, shown as its first four letters.
+    // Tap to filter, tap again to clear; nothing selected shows everything.
+    const tags = allTags();
+    chips.innerHTML = '';
+    tags.forEach(t => {
+      const key = t.toLowerCase();
+      const c = document.createElement('button');
+      c.className = 'chip filter' + (activeFilters.has(key) ? ' on' : '');
+      c.dataset.tag = key;
+      c.style.setProperty('--c', tagColor(t));
+      c.innerHTML = `<span class="swatch"></span>${esc(t.slice(0, 4))}`;
+      c.title = t;
+      c.onclick = () => { activeFilters.has(key) ? activeFilters.delete(key) : activeFilters.add(key); persistFilters(); render(); };
+      chips.appendChild(c);
+    });
+
+    // pages
+    const openCards = new Set([...pages.querySelectorAll('.card.open')].map(c => c.dataset.line));
+    pages.innerHTML = '';
+    model.sections.forEach((s, si) => {
+      const page = document.createElement('section');
+      page.className = 'page';
+      page.dataset.index = si;
+      const items = s.items.filter(visible);
+      if (items.length === 0) {
+        page.innerHTML = `<div class="empty">${EMPTY_ICON}<strong>${activeFilters.size ? 'Nothing here' : 'All clear'}</strong>${activeFilters.size ? 'for this filter in ' + esc(s.name) : 'Nothing in ' + esc(s.name)}</div>`;
+      }
+      items.forEach(it => page.appendChild(card(it, openCards.has(String(it.line)))));
+      pages.appendChild(page);
+    });
+    // Restore the horizontal position with snapping off for a frame: WebKit otherwise
+    // re-snaps a rebuilt container to its first page.
+    pages.style.scrollSnapType = 'none';
+    pages.scrollLeft = currentSection * pages.clientWidth;
+    requestAnimationFrame(() => {
+      pages.scrollLeft = currentSection * pages.clientWidth;
+      pages.style.scrollSnapType = '';
+    });
+  }
+
+  function card(it, open) {
+    const el = document.createElement('article');
+    el.className = 'card' + (it.done ? ' done' : '') + (open ? ' open' : '');
+    el.dataset.line = it.line;
+    el.style.setProperty('--c', tagColor(it.tag));
+    const subsDone = it.subs.filter(s => s.done).length;
+    const expandable = it.subs.length > 0 || it.note.length > 120;
+    el.innerHTML = `
+      <div class="row">
+        <button class="box${it.done ? ' on' : ''}" aria-label="Toggle">${CHECK}</button>
+        <div class="main">
+          <div class="head">
+            ${it.tag ? `<span class="tag">${esc(it.tag)}</span>` : ''}
+            ${it.subs.length ? `<span class="prog num"><i style="--p:${Math.round(subsDone / it.subs.length * 100)}%"></i>${subsDone}/${it.subs.length}</span>` : ''}
+            ${expandable ? `<span class="chev">${CHEV}</span>` : ''}
+          </div>
+          <div class="ttl">${inline(it.title)}</div>
+          ${it.note ? `<div class="note">${inline(it.note)}</div>` : ''}
+          <div class="subs">${it.subs.map(s => `
+            <div class="row sub${s.done ? ' on' : ''}" data-line="${s.line}">
+              <button class="box${s.done ? ' on' : ''}" aria-label="Toggle subtask">${CHECK}</button>
+              <div class="txt">${inline(s.text)}</div>
+            </div>`).join('')}</div>
+        </div>
+      </div>`;
+    el.querySelector('.row > .box').onclick = e => { e.stopPropagation(); toggleItem(it, el); };
+    el.querySelectorAll('.row.sub .box').forEach((b, k) => {
+      b.onclick = e => { e.stopPropagation(); toggleSub(it, it.subs[k]); };
+    });
+    el.onclick = e => { if (e.target.closest('a')) return; el.classList.toggle('open'); };
+    return el;
+  }
+
+  // Tab tap: only move, never rebuild. Rebuilding the pages mid-scroll makes iOS snap back.
+  function goTo(i) {
+    currentSection = i;
+    store.set(LS.section, i);
+    [...$('tabs').children].forEach((t, k) => t.classList.toggle('active', k === i));
+    $('tabs').children[i]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    const page = $('pages').children[i];
+    if (page) page.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+  }
+
+  // keep tab state in sync with swipes
+  let scrollTimer = null;
+  $('pages').addEventListener('scroll', () => {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      const pages = $('pages');
+      const i = Math.round(pages.scrollLeft / pages.clientWidth);
+      if (i !== currentSection && model && i < model.sections.length) {
+        currentSection = i; store.set(LS.section, i);
+        [...$('tabs').children].forEach((t, k) => t.classList.toggle('active', k === i));
+        $('tabs').children[i]?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      }
+    }, 80);
+  });
+  function persistFilters() { store.set(LS.filters, [...activeFilters]); }
+
+  // ---------- edits ----------
+  function setMarker(line, done) {
+    return line.replace(/^(\s*- )\[( |x|X)\]/, `$1[${done ? 'x' : ' '}]`);
+  }
+  function restyleTop(body, done) {
+    // open items are bold, done items are struck through: mirror the file's convention
+    const b = RX_BOLD.exec(body), s = RX_STRIKE.exec(body);
+    if (done && b) return `~~[${b[1]}] ${b[2]}~~` + (b[3] ? ` - ${b[3]}` : '');
+    if (!done && s) return `**[${s[1]}] ${s[2]}**` + (s[3] ? ` - ${s[3]}` : '');
+    return body;
+  }
+  function findSection(lines, name) {
+    return lines.findIndex(l => new RegExp(`^##\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i').test(l));
+  }
+  const sectionNames = () => model.sections.map(s => s.name);
+  const isDone = name => name.toLowerCase() === 'done';
+
+  // Where an item came from before it was completed, so un-checking puts it back there.
+  const itemKey = it => (it.tag + '|' + it.title).toLowerCase();
+  function rememberOrigin(it, sectionName) {
+    const o = store.get(LS.origins, {});
+    o[itemKey(it)] = sectionName;
+    const keys = Object.keys(o);
+    if (keys.length > 300) keys.slice(0, keys.length - 300).forEach(k => delete o[k]);
+    store.set(LS.origins, o);
+  }
+  function originOf(it) {
+    const name = store.get(LS.origins, {})[itemKey(it)];
+    return name && sectionNames().find(s => s.toLowerCase() === name.toLowerCase()) || null;
+  }
+
+  // ---------- operations ----------
+  // Every edit is a small operation that finds its target by content, not by line number,
+  // so it can be applied again to a fresh copy of the file. That is what lets edits made
+  // offline, or against a copy that changed elsewhere, replay instead of being lost.
+  //   sub    { item, text, done }      set one subtask's marker
+  //   item   { key, done, to }         set a top-level item's marker (subtasks too when completing), move to a section
+  //   add    { title, tag, section, note }
+  //   remove { key }                   undo of add
+  function findItem(m, key) {
+    for (const s of m.sections) for (const it of s.items) if (itemKey(it) === key) return { it, section: s };
+    return null;
+  }
+  function blockEnd(it) { return it.subs.length ? it.subs[it.subs.length - 1].line : it.line; }
+
+  function applyOp(src, op) {
+    const m = parse(src.join('\n'));
+    const lines = src.slice();
+    if (op.op === 'sub') {
+      const f = findItem(m, op.item); if (!f) return null;
+      const sub = f.it.subs.find(s => s.text === op.text); if (!sub) return null;
+      lines[sub.line] = setMarker(lines[sub.line], op.done);
+      return lines;
+    }
+    if (op.op === 'item') {
+      const f = findItem(m, op.key); if (!f) return null;
+      const it = f.it, end = blockEnd(it);
+      const mm = RX_ITEM.exec(lines[it.line]);
+      lines[it.line] = setMarker(`${mm[1]}- [ ] ${restyleTop(mm[3], op.done)}`, op.done);
+      if (op.done) it.subs.forEach(s => { lines[s.line] = setMarker(lines[s.line], true); });
+      if (op.to && f.section.name.toLowerCase() !== op.to.toLowerCase() && findSection(lines, op.to) >= 0) {
+        const chunk = lines.splice(it.line, end - it.line + 1);
+        lines.splice(findSection(lines, op.to) + 1, 0, ...chunk);
+      }
+      return lines;
+    }
+    if (op.op === 'add') {
+      const key = (op.tag + '|' + op.title).toLowerCase();
+      if (findItem(m, key)) return lines;          // already there (a replay after a save that did land)
+      let idx = findSection(lines, op.section);
+      if (idx < 0) { lines.push('', `## ${op.section}`); idx = lines.length - 1; }
+      lines.splice(idx + 1, 0, `- [ ] **[${op.tag}] ${op.title}**` + (op.note ? ` - ${op.note}` : ''));
+      return lines;
+    }
+    if (op.op === 'remove') {
+      const f = findItem(m, op.key); if (!f) return lines;
+      lines.splice(f.it.line, blockEnd(f.it) - f.it.line + 1);
+      return lines;
+    }
+    return null;
+  }
+  function inverse(op, ctx) {
+    if (op.op === 'sub') return { op: 'sub', item: op.item, text: op.text, done: !op.done };
+    if (op.op === 'item') return { op: 'item', key: op.key, done: !op.done, to: ctx.from || null };
+    if (op.op === 'add') return { op: 'remove', key: (op.tag + '|' + op.title).toLowerCase() };
+    return null;
+  }
+
+  async function toggleItem(it, el) {
+    const fromName = model.sections[currentSection].name;
+    const done = !it.done;
+    if (done) {
+      if (!isDone(fromName)) rememberOrigin(it, fromName);
+      return runItem(it, true, isDone(fromName) ? null : 'Done', fromName, el);
+    }
+    if (!isDone(fromName)) return runItem(it, false, null, fromName, el);
+    const origin = originOf(it);
+    if (origin) return runItem(it, false, origin, fromName, el);
+    openReopen(it, el);
+  }
+  async function runItem(it, done, to, from, el) {
+    let msg = done ? 'Completed' : 'Reopened';
+    if (to && to.toLowerCase() !== from.toLowerCase()) {
+      msg = done ? 'Moved to ' + to : 'Reopened in ' + to;
+      if (el) { el.classList.add('leaving'); await wait(190); }
+    }
+    return commit({ op: 'item', key: itemKey(it), done, to }, msg, { from });
+  }
+  function toggleSub(it, sub) {
+    return commit({ op: 'sub', item: itemKey(it), text: sub.text, done: !sub.done }, null);
+  }
+  function addTask({ title, tag, sectionName, note }) {
+    return commit({ op: 'add', title, tag, section: sectionName, note }, 'Added');
+  }
+
+  // Apply locally right away, remember the operation, then try to save. If saving fails the
+  // operation waits in the queue and is retried when the app wakes, goes online, or refreshes.
+  let pending = store.get(LS.pending, []);
+  const persistPending = () => store.set(LS.pending, pending);
+  async function commit(op, msg, ctx = {}) {
+    const next = applyOp(model.lines, op);
+    if (!next) { toast('Could not find that item, refreshing'); return load(true); }
+    applyLocal(next.join('\n'));
+    pending.push(op); persistPending();
+    if (msg) toast(msg, () => commit(inverse(op, ctx), null));
+    flush();
+  }
+  function applyLocal(next) {
+    text = next;
+    model = parse(text);
+    store.set(LS.cache, { text, rev, at: Date.now() });
+    render();
+  }
+
+  // Upload what we have. On a conflict (the file changed elsewhere), fetch the new copy,
+  // replay the queued operations on top of it, and upload once more.
+  let flushing = false;
+  async function flush() {
+    if (flushing || !pending.length || !tokens()) return;
+    flushing = true;
+    setStatus('busy', 'Saving');
+    try {
+      while (pending.length) {
+        const snapshot = text, count = pending.length;
+        try {
+          await upload(snapshot);
+        } catch (e) {
+          if (!e.conflict) throw e;
+          await rebase();
+          await upload(text);
+          pending = []; persistPending();
+          break;
+        }
+        pending.splice(0, count); persistPending();
+      }
+      setStatus('ok', 'Saved');
+    } catch (e) {
+      if (e.noauth) setStatus('err', 'Not connected');
+      else if (e.conflict) setStatus('err', `Conflict · ${pending.length} pending`);
+      else if (e.offline) setStatus('err', `Offline · ${pending.length} pending`);
+      else { setStatus('err', `Not saved · ${pending.length} pending`); toast(e.message); }
+    } finally { flushing = false; }
+  }
+  async function rebase() {
+    const { body, rev: r } = await download();
+    rev = r;
+    let lines = body.split('\n'), dropped = 0;
+    const kept = [];
+    for (const op of pending) {
+      const n = applyOp(lines, op);
+      if (n) { lines = n; kept.push(op); } else dropped++;
+    }
+    pending = kept; persistPending();
+    applyLocal(lines.join('\n'));
+    if (dropped) toast(`${dropped} change${dropped > 1 ? 's' : ''} no longer applied`);
+  }
+
+  // ---------- dropbox ----------
+  const tokens = () => store.get(LS.tokens);
+  const appKey = () => store.get(LS.appKey, '');
+  const filePath = () => store.get(LS.path, '/TASKS.md');
+
+  function b64url(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  // Dropbox's no-redirect flow: Dropbox shows the user a code, the user pastes it here.
+  // No redirect URI, so this works from anywhere the page can run. PKCE still applies.
+  async function startAuth() {
+    const key = $('appKey').value.trim();
+    if (!key) { toast('Enter your Dropbox app key first'); return; }
+    if (!window.isSecureContext || !crypto.subtle) {
+      toast('Open this page over https or localhost to log in');
+      return;
+    }
+    store.set(LS.appKey, key);
+    store.set(LS.path, $('filePath').value.trim() || '/TASKS.md');
+    const rnd = crypto.getRandomValues(new Uint8Array(48));
+    const verifier = b64url(rnd);
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    store.set(LS.verifier, verifier);
+    const u = new URL('https://www.dropbox.com/oauth2/authorize');
+    u.search = new URLSearchParams({
+      client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256',
+      token_access_type: 'offline',
+    });
+    window.open(u.toString(), '_blank', 'noopener');
+    setTimeout(() => $('authCode').focus(), 300);
+  }
+  async function finishAuth(code) {
+    const verifier = store.get(LS.verifier);
+    if (!verifier) throw new Error('Start with step 1 first');
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, grant_type: 'authorization_code', code_verifier: verifier, client_id: appKey() }),
+    });
+    if (!r.ok) throw new Error('Token exchange failed: ' + await r.text());
+    saveTokens(await r.json());
+    store.del(LS.verifier);
+  }
+  function saveTokens(j) {
+    const t = tokens() || {};
+    store.set(LS.tokens, {
+      access: j.access_token,
+      refresh: j.refresh_token || t.refresh,
+      exp: Date.now() + (j.expires_in - 60) * 1000,
+    });
+  }
+  async function accessToken() {
+    const t = tokens();
+    if (!t) throw Object.assign(new Error('Not connected'), { noauth: true });
+    if (Date.now() < t.exp) return t.access;
+    const r = await netFetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh, client_id: appKey() }),
+    });
+    if (r.status >= 500) throw Object.assign(new Error('Dropbox unavailable'), { offline: true });
+    if (!r.ok) { store.del(LS.tokens); throw Object.assign(new Error('Session expired, connect again'), { noauth: true }); }
+    saveTokens(await r.json());
+    return tokens().access;
+  }
+  async function download() {
+    const tok = await accessToken();
+    const r = await netFetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + tok, 'Dropbox-API-Arg': JSON.stringify({ path: filePath() }) },
+    });
+    if (!r.ok) throw Object.assign(new Error('Download failed: ' + await r.text()), { status: r.status, offline: r.status >= 500 });
+    const meta = r.headers.get('dropbox-api-result');
+    const body = await r.text();
+    let newRev = meta ? JSON.parse(meta).rev : null;
+    if (!newRev) {
+      const m = await fetch('https://api.dropboxapi.com/2/files/get_metadata', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath() }),
+      });
+      if (m.ok) newRev = (await m.json()).rev;
+    }
+    return { body, rev: newRev };
+  }
+  // A failed fetch (no network) is tagged offline; a Dropbox 409 whose body says "conflict"
+  // is a revision mismatch. Both keep the queue; only the second one triggers a rebase.
+  async function netFetch(url, init) {
+    try { return await fetch(url, init); }
+    catch (e) { throw Object.assign(new Error('No connection'), { offline: true }); }
+  }
+  async function upload(content) {
+    const tok = await accessToken();
+    const mode = rev ? { '.tag': 'update', update: rev } : 'overwrite';
+    const r = await netFetch('https://content.dropboxapi.com/2/files/upload', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + tok,
+        'Content-Type': 'application/octet-stream',
+        'Dropbox-API-Arg': JSON.stringify({ path: filePath(), mode, autorename: false, mute: true }),
+      },
+      body: new Blob([content], { type: 'text/plain' }),
+    });
+    if (!r.ok) {
+      const body = await r.text();
+      throw Object.assign(new Error('Upload failed: ' + body), {
+        status: r.status,
+        conflict: r.status === 409 && /conflict/.test(body),
+        offline: r.status >= 500 || r.status === 429,
+      });
+    }
+    rev = (await r.json()).rev;
+    store.set(LS.cache, { text: content, rev, at: Date.now() });
+  }
+
+  async function load(quiet) {
+    if (!tokens()) { setStatus('', 'Not connected'); return; }
+    if (flushing) return;
+    setStatus('busy', 'Syncing');
+    try {
+      if (pending.length) {                    // bring the remote copy in under the queued edits, then save
+        await rebase();
+        await flush();
+        return;
+      }
+      const { body, rev: r } = await download();
+      rev = r;
+      applyLocal(body);
+      setStatus('ok', 'Up to date');
+    } catch (e) {
+      if (e.noauth) setStatus('err', 'Not connected');
+      else setStatus('err', pending.length ? `Offline · ${pending.length} pending` : 'Offline');
+      if (!quiet && !e.offline) toast(e.message);
+    }
+  }
+
+  function setStatus(kind, msg) {
+    const s = $('status');
+    s.className = 'status ' + kind;
+    $('statusText').textContent = msg;
+  }
+
+  // ---------- sheets / toast ----------
+  const UNDO_MS = 6000;
+  let toastTimer = null;
+  function toast(msg, undo) {
+    const t = $('toast');
+    $('toastText').textContent = msg;
+    const a = $('toastAction');
+    a.hidden = !undo;
+    a.onclick = () => { hideToast(); undo && undo(); };
+    t.classList.toggle('undo', !!undo);
+    t.style.setProperty('--t', UNDO_MS + 'ms');
+    const bar = t.querySelector('.bar i');
+    bar.style.animation = 'none'; void bar.offsetWidth; bar.style.animation = '';
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, undo ? UNDO_MS : 2800);
+  }
+  function hideToast() { $('toast').classList.remove('show'); }
+
+  function openSheet(id) { $('scrim').classList.add('show'); $(id).classList.add('show'); }
+  function closeSheets() {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    $('scrim').classList.remove('show');
+    document.querySelectorAll('.sheet').forEach(s => s.classList.remove('show'));
+  }
+  $('scrim').onclick = closeSheets;
+
+  // Swipe a sheet down to dismiss it. Follows the finger, snaps back on a short drag.
+  document.querySelectorAll('.sheet').forEach(sheet => {
+    let y0 = null, dy = 0;
+    sheet.addEventListener('touchstart', e => {
+      if (sheet.scrollTop > 0 || e.target.closest('textarea')) return;
+      y0 = e.touches[0].clientY; dy = 0;
+    }, { passive: true });
+    sheet.addEventListener('touchmove', e => {
+      if (y0 == null) return;
+      dy = Math.max(0, e.touches[0].clientY - y0);
+      sheet.style.transition = 'none';
+      sheet.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    const end = () => {
+      if (y0 == null) return;
+      y0 = null;
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      if (dy > 90) closeSheets();
+    };
+    sheet.addEventListener('touchend', end);
+    sheet.addEventListener('touchcancel', end);
+  });
+
+  function chipRow(el, names, selected, onPick, colorFor) {
+    el.innerHTML = '';
+    names.forEach(n => {
+      const c = document.createElement('button');
+      c.className = 'chip pick' + (n === selected ? ' on' : '');
+      if (colorFor) { c.style.setProperty('--c', colorFor(n)); c.innerHTML = `<span class="swatch"></span>${esc(n)}`; }
+      else c.textContent = n;
+      c.onclick = () => { [...el.children].forEach(x => x.classList.toggle('on', x === c)); onPick(n); };
+      el.appendChild(c);
+    });
+  }
+
+  // add sheet
+  let addTag = null, addSection = null;
+  function openAdd() {
+    if (!model) { toast('Connect Dropbox first'); openSettings(); return; }
+    const secs = sectionNames();
+    addSection = secs[currentSection] || secs[0];
+    const tags = allTags();
+    const single = [...activeFilters];
+    const pick = k => tags.find(t => t.toLowerCase() === k);
+    addTag = (single.length === 1 && pick(single[0])) || pick(store.get(LS.lastTag, '')) || tags[0] || 'Task';
+    chipRow($('addTags'), tags, addTag, t => { addTag = t; }, tagColor);
+    chipRow($('addSections'), secs.filter(s => !isDone(s)), addSection, s => { addSection = s; });
+    $('addTitle').value = ''; $('addNote').value = '';
+    openSheet('addSheet');
+    setTimeout(() => $('addTitle').focus(), 250);
+  }
+  $('fab').onclick = openAdd;
+  $('addCancel').onclick = closeSheets;
+  $('addSave').onclick = async () => {
+    const title = $('addTitle').value.trim();
+    if (!title) { $('addTitle').focus(); return; }
+    closeSheets();
+    store.set(LS.lastTag, addTag.toLowerCase());
+    await addTask({ title, tag: addTag, sectionName: addSection, note: $('addNote').value.trim() });
+    const i = model.sections.findIndex(s => s.name === addSection);
+    if (i >= 0) goTo(i);
+  };
+  $('addTitle').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('addSave').click(); } });
+
+  // reopen sheet
+  function openReopen(it, el) {
+    $('reopenTitle').textContent = it.title;
+    chipRow($('reopenSections'), sectionNames().filter(s => !isDone(s)), null, async name => {
+      closeSheets();
+      rememberOrigin(it, name);
+      await runItem(it, false, name, 'Done', el);
+    });
+    openSheet('reopenSheet');
+  }
+  $('reopenCancel').onclick = closeSheets;
+
+  // settings sheet
+  function openSettings() {
+    $('appKey').value = appKey();
+    $('filePath').value = filePath();
+    $('authCode').value = '';
+    const t = tokens();
+    if (host) {
+      $('settingsHelp').textContent = t
+        ? 'Connected. Reading and writing ' + filePath() + '.'
+        : 'Signed out. Close and reopen the app to log in to Dropbox again.';
+      $('appKeyField').hidden = true;
+      $('connectBlock').hidden = true;
+    } else {
+      $('settingsHelp').textContent = t
+        ? 'Connected. Reading and writing ' + filePath() + '.'
+        : 'Create an app at dropbox.com/developers/apps (Scoped access, permissions files.content.read and files.content.write) and paste its app key here. Step 1 opens Dropbox, which shows a code; paste it in step 2.';
+      $('appKeyField').hidden = !!t;
+      $('connectBlock').hidden = !!t;
+    }
+    $('btnSignOut').style.display = t ? '' : 'none';
+    openSheet('settingsSheet');
+  }
+  // Settings stay out of the way: the title is the only way in.
+  $('title').onclick = openSettings;
+  $('settingsClose').onclick = closeSheets;
+  $('btnConnect').onclick = startAuth;
+  $('btnFinish').onclick = async () => {
+    const code = $('authCode').value.trim();
+    if (!code) { $('authCode').focus(); return; }
+    try { await finishAuth(code); }
+    catch (e) { toast(e.message); return; }
+    closeSheets();
+    toast('Connected to Dropbox');
+    await load(false);
+  };
+  $('filePath').onchange = () => { store.set(LS.path, $('filePath').value.trim() || '/TASKS.md'); };
+  $('btnSignOut').onclick = () => {
+    store.del(LS.tokens); store.del(LS.cache);
+    host?.send({ type: 'signout' });
+    text = ''; model = null; rev = null; closeSheets();
+    $('pages').innerHTML = ''; $('tabs').innerHTML = ''; $('chips').innerHTML = '';
+    setStatus('', 'Not connected');
+    if (host) toast('Signed out. Reopen the app to log in again.');
+  };
+  // Tapping the status refreshes too; pull-to-refresh is the main gesture.
+  $('status').onclick = () => { if (!pull.refreshing) doRefresh(); };
+
+  // ---------- pull to refresh ----------
+  const PTR_MAX = 76, PTR_TRIGGER = 58;
+  const pull = { y0: 0, x0: 0, active: false, dist: 0, refreshing: false };
+  const pagesEl = $('pages'), ptr = $('ptr');
+  const activePage = () => pagesEl.children[currentSection];
+  function setPull(h, animate) {
+    ptr.classList.toggle('pulling', !animate);
+    ptr.style.height = h + 'px';
+    ptr.classList.toggle('ready', h >= PTR_TRIGGER);
+    ptr.querySelector('.ptr-icon').style.transform = `rotate(${Math.round(h / PTR_TRIGGER * 180)}deg)`;
+  }
+  async function doRefresh() {
+    pull.refreshing = true;
+    ptr.classList.add('refreshing');
+    ptr.querySelector('.ptr-icon').style.transform = '';
+    setPull(46, true);
+    try { await load(false); }
+    finally {
+      ptr.classList.remove('refreshing');
+      setPull(0, true);
+      pull.refreshing = false;
+    }
+  }
+  pagesEl.addEventListener('touchstart', e => {
+    if (pull.refreshing || e.touches.length !== 1 || !model) return;
+    const p = activePage();
+    if (!p || p.scrollTop > 0) return;
+    pull.y0 = e.touches[0].clientY; pull.x0 = e.touches[0].clientX;
+    pull.active = true; pull.dist = 0;
+  }, { passive: true });
+  pagesEl.addEventListener('touchmove', e => {
+    if (!pull.active) return;
+    const dy = e.touches[0].clientY - pull.y0, dx = e.touches[0].clientX - pull.x0;
+    if (pull.dist === 0 && Math.abs(dx) > Math.abs(dy)) { pull.active = false; return; }   // it's a swipe between sections
+    if (dy <= 0 || activePage().scrollTop > 0) { pull.active = pull.dist > 0; setPull(0, false); pull.dist = 0; return; }
+    e.preventDefault();
+    pull.dist = Math.min(PTR_MAX, dy * 0.5);
+    setPull(pull.dist, false);
+  }, { passive: false });
+  const endPull = () => {
+    if (!pull.active) return;
+    pull.active = false;
+    if (pull.dist >= PTR_TRIGGER) doRefresh(); else setPull(0, true);
+    pull.dist = 0;
+  };
+  pagesEl.addEventListener('touchend', endPull);
+  pagesEl.addEventListener('touchcancel', endPull);
+
+  // ---------- boot ----------
+  (async () => {
+    // show cached content immediately
+    const cache = store.get(LS.cache);
+    if (cache && cache.text) { text = cache.text; rev = cache.rev; model = parse(text); render(); setStatus('', 'Cached'); }
+
+    if (pending.length) setStatus('err', `Offline · ${pending.length} pending`);
+    if (!tokens() && !cache) openSettings();
+    await load(true);
+
+    // refresh when coming back to the app; retry queued edits when the network returns or on a timer
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') load(true); });
+    window.addEventListener('online', () => load(true));
+    setInterval(() => { if (pending.length && !flushing && document.visibilityState === 'visible') load(true); }, 20000);
+    window.addEventListener('resize', () => { if (model) $('pages').scrollLeft = currentSection * $('pages').clientWidth; });
+  })();
+})();
+</script>
+</body>
+</html>

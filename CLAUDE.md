@@ -5,21 +5,30 @@ This document provides guidance for AI assistants working with this codebase.
 ## Project Overview
 
 **Repository:** keithtronics
-**Status:** New project (initial setup)
-**Last Updated:** 2026-01-26
+**Status:** Personal tools
+**Last Updated:** 2026-09-17
 
-> **Note:** This is a newly initialized repository. Update this section as the project develops with:
-> - Project purpose and goals
-> - Technology stack
-> - Target platforms/users
+Small personal utilities. The first one is a phone-friendly view of a Dropbox-hosted Markdown task list (see `app/README.md`). This repository is public and doubles as the GitHub profile repo: keep personal data, client names and anything from the task file itself out of it, and do not add a root README that isn't meant for the profile page.
 
 ## Codebase Structure
 
 ```
 keithtronics/
-├── CLAUDE.md          # This file - AI assistant guidelines
-└── (project files)    # To be added
+├── CLAUDE.md                        # This file - AI assistant guidelines
+└── app/                             # Runs on the phone inside Scriptable; never hosted
+    ├── README.md                    # Setup and usage
+    ├── index.html                   # The page: vanilla JS, also runs in a browser for development
+    ├── scriptable/Bureau.template.js # Scriptable host: login, keychain, widget, page bridge
+    ├── build.mjs                    # node app/build.mjs → inlines index.html into Bureau.js
+    └── Bureau.js                     # Generated; committed so it can be copied to the phone
 ```
+
+### Bureau app notes
+
+- Talks to Dropbox directly (OAuth PKCE with Dropbox's no-redirect paste-a-code flow, `files/download`, `files/upload` with rev check). No server, no secret, no redirect URI.
+- The page talks to its host through `window.__host` / `window.__hostState` (injected) and `window.__outbox` / `window.__waiter` (drained by the host's `evaluateJavaScript` loop). Everything the page stores goes through `store`, which mirrors to the host.
+- The parser in `app/index.html` depends on the file's conventions: `## Section` headings, `- [ ] **[Tag] Title** - note` items, `~~...~~` for done items, two-space-indented subtasks. Tags are read from the file, never hardcoded. Keep edits line-surgical so the file never gets reformatted.
+- After editing `index.html` or the template, run `node app/build.mjs` and commit `Bureau.js`. Test with Playwright: mock the Dropbox endpoints for the browser path, and run `Bureau.js` under stubbed Scriptable globals with a real page as the WebView.
 
 ### Recommended Directory Structure
 
